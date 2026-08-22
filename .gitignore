@@ -1,0 +1,7 @@
+.env
+node_modules/
+data/
+cripteddata/
+../package-lock.json
+*.db
+
