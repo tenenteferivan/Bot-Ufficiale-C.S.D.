@@ -122,7 +122,7 @@ a { color:var(--accent); }
 </style>
 </head>
 <body><main class="wrapper">
-<header class="header"><p class="kicker">C.S.S.D. Supporto</p><h1>Transcript ticket #${ticket.ticketNumber.toString().padStart(4, '0')}</h1><p class="subtitle">${escapeHtml(category.emoji)} ${escapeHtml(category.label)} · #${escapeHtml(channel.name)}</p></header>
+<header class="header"><p class="kicker">C.S.D. Supporto</p><h1>Transcript ticket #${ticket.ticketNumber.toString().padStart(4, '0')}</h1><p class="subtitle">${escapeHtml(category.emoji)} ${escapeHtml(category.label)} · #${escapeHtml(channel.name)}</p></header>
 <section class="meta">
 <div class="meta-card"><span class="label">Richiedente</span><span class="value">${escapeHtml(ticket.openerId)}</span></div>
 <div class="meta-card"><span class="label">Chiuso da</span><span class="value">${escapeHtml(closer.tag)} (${escapeHtml(closer.id)})</span></div>
@@ -134,27 +134,15 @@ a { color:var(--accent); }
 <p class="footer">Transcript generato il ${escapeHtml(new Date().toLocaleString('it-IT'))}</p>
 </main></body></html>`;
 }
-async function sendTicketTranscript(client, channel, ticket, closer, reason) {
+async function sendTicketTranscript(channel, ticket, closer, reason) {
     const messages = await fetchAllMessages(channel);
     const html = buildHtml(channel, ticket, closer, reason, messages);
-    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'cssd-ticket-transcript-'));
+    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'csd-ticket-transcript-'));
     const filePath = path.join(tempDir, `ticket-${String(ticket.ticketNumber).padStart(4, '0')}.html`);
     try {
         await (0, promises_1.writeFile)(filePath, html, 'utf8');
-        const logChannelId = process.env.CANALE_LOGS?.trim();
-        const logChannel = logChannelId ? await client.channels.fetch(logChannelId).catch(() => null) : null;
         const attachmentName = path.basename(filePath);
-        const logAttachment = new discord_js_1.AttachmentBuilder(filePath, { name: attachmentName });
         const dmAttachment = new discord_js_1.AttachmentBuilder(filePath, { name: attachmentName });
-        const summary = `Ticket **#${String(ticket.ticketNumber).padStart(4, '0')}** chiuso da ${closer}.\nCategoria: **${ticketManager_1.ticketCategories[ticket.category].label}**\nMotivazione: ${reason.slice(0, 1000)}`;
-        if (logChannel?.isTextBased() && 'send' in logChannel) {
-            await logChannel.send({ content: `📁 **Transcript ticket chiuso**\n${summary}`, files: [logAttachment] }).catch((error) => {
-                console.error('Impossibile inviare il transcript nei log:', error);
-            });
-        }
-        else {
-            console.error('CANALE_LOGS non trovato o non testuale: transcript non inviato nei log.');
-        }
         await closer.send({ content: `📁 Il transcript del ticket **#${String(ticket.ticketNumber).padStart(4, '0')}** è allegato a questo messaggio.`, files: [dmAttachment] }).catch((error) => {
             console.error('Impossibile inviare il transcript in DM:', error);
         });

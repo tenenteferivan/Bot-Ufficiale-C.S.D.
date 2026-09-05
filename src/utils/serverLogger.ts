@@ -12,36 +12,37 @@ import {
   Role,
   User,
 } from 'discord.js';
+import { getLogConfig } from '../handlers/databasehandler';
 
 const ignoredCommandNames = new Set(['aggiungi-archivio', 'ritira-file', 'rimuovi-archivio']);
 
 interface LoggableUser {
   id: string;
-  tag?: string;
-  user?: { tag?: string };
+  tag?: string | null;
+  user?: { tag?: string | null };
 }
 
 function isArchiveCommand(commandName: string): boolean {
   return commandName.toLowerCase().includes('archivio') || ignoredCommandNames.has(commandName.toLowerCase());
 }
 
-async function getLogChannel(client: Client) {
-  const channelId = process.env.CANALE_LOGS?.trim();
+async function getLogChannel(client: Client, guildId: string) {
+  const channelId = await getLogConfig(guildId);
   if (!channelId) return null;
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel) {
-    console.error(`CANALE_LOGS=${channelId}: canale non trovato o bot senza accesso.`);
+    console.error(`Log channel ${channelId} non trovato o bot senza accesso per guild ${guildId}.`);
     return null;
   }
   if (!channel.isTextBased() || !('send' in channel)) {
-    console.error(`CANALE_LOGS=${channelId}: il canale non è testuale.`);
+    console.error(`Log channel ${channelId} non è testuale per guild ${guildId}.`);
     return null;
   }
   return channel;
 }
 
-export async function sendServerLog(client: Client, title: string, description: string, color = 0x5865f2, fields: { name: string; value: string; inline?: boolean }[] = []): Promise<void> {
-  const channel = await getLogChannel(client);
+export async function sendServerLog(client: Client, guildId: string, title: string, description: string, color = 0x5865f2, fields: { name: string; value: string; inline?: boolean }[] = []): Promise<void> {
+  const channel = await getLogChannel(client, guildId);
   if (!channel) return;
   const embed = new EmbedBuilder()
     .setColor(color)
@@ -51,7 +52,7 @@ export async function sendServerLog(client: Client, title: string, description: 
     .setTimestamp();
   await channel.send({ embeds: [embed] }).catch((error: any) => {
     if (error?.code === 50001 || error?.code === 50013) {
-      console.error(`Impossibile inviare il log in CANALE_LOGS=${process.env.CANALE_LOGS}: il bot deve avere ViewChannel e SendMessages.`);
+      console.error(`Impossibile inviare il log nel channel configurato per guild ${guildId}: il bot deve avere ViewChannel e SendMessages.`);
       return;
     }
     console.error('Impossibile inviare il log:', error);
@@ -71,7 +72,10 @@ async function findRecentAuditEntry(guild: Guild, action: AuditLogEvent, targetI
   const logs = await guild.fetchAuditLogs({ type: action, limit: 5 }).catch(() => null);
   if (!logs) return null;
   const now = Date.now();
-  return logs.entries.find((entry) => (!targetId || entry.target?.id === targetId) && now - entry.createdTimestamp < 15_000) ?? null;
+  return logs.entries.find((entry) => {
+    const matchesTarget = !targetId || Boolean(entry.target && 'id' in entry.target && entry.target.id === targetId);
+    return matchesTarget && now - entry.createdTimestamp < 15_000;
+  }) ?? null;
 }
 
 function diffMap(before: Map<string, string>, after: Map<string, string>): string[] {
@@ -93,11 +97,11 @@ function channelOverwrites(channel: GuildChannel): Map<string, string> {
   return new Map(channel.permissionOverwrites.cache.map((overwrite) => [overwrite.id, `${overwrite.type}:${overwrite.allow.toArray().join('|') || '-'}:${overwrite.deny.toArray().join('|') || '-'}`]));
 }
 
-export async function logCommand(client: Client, commandName: string, user: User, guildName?: string): Promise<void> {
-  if (isArchiveCommand(commandName)) return;
-  await sendServerLog(client, 'Comando del bot eseguito', `/${commandName}`, 0x3498db, [
+export async function logCommand(client: Client, commandName: string, user: User, guildId?: string): Promise<void> {
+  if (isArchiveCommand(commandName) || !guildId) return;
+  await sendServerLog(client, guildId, 'Comando del bot eseguito', `/${commandName}`, 0x3498db, [
     { name: 'Utente', value: formatUser(user), inline: true },
-    { name: 'Server', value: guildName ?? 'DM', inline: true },
+    { name: 'Server', value: guildId, inline: true },
   ]);
 }
 
@@ -106,7 +110,7 @@ export async function logMessageDelete(client: Client, message: Message | Partia
 
   const content = message.content?.trim() || 'Contenuto non disponibile: il messaggio non era nella cache.';
   const channelName = 'name' in message.channel ? message.channel.name : message.channel.id;
-  await sendServerLog(client, 'Messaggio eliminato', `Canale: **#${channelName}**`, 0xed4245, [
+  await sendServerLog(client, message.guild.id, 'Messaggio eliminato', `Canale: **#${channelName}**`, 0xed4245, [
     { name: 'Autore', value: formatUser(message.author), inline: true },
     { name: 'ID messaggio', value: message.id, inline: true },
     { name: 'Contenuto', value: content },
@@ -114,16 +118,16 @@ export async function logMessageDelete(client: Client, message: Message | Partia
 }
 
 export async function logMemberJoin(client: Client, member: GuildMember): Promise<void> {
-  await sendServerLog(client, 'Membro entrato', `${formatUser(member)} è entrato nel server.`, 0x57f287, [{ name: 'Server', value: member.guild.name }]);
+  await sendServerLog(client, member.guild.id, 'Membro entrato', `${formatUser(member)} è entrato nel server.`, 0x57f287, [{ name: 'Server', value: member.guild.name }]);
 }
 
 export async function logMemberLeave(client: Client, member: GuildMember | PartialGuildMember): Promise<void> {
-  await sendServerLog(client, 'Membro uscito', `${formatUser(member)} ha lasciato il server.`, 0xed4245, [{ name: 'Server', value: member.guild.name }]);
+  await sendServerLog(client, member.guild.id, 'Membro uscito', `${formatUser(member)} ha lasciato il server.`, 0xed4245, [{ name: 'Server', value: member.guild.name }]);
 }
 
 export async function logBan(client: Client, guild: Guild, user: User, added: boolean): Promise<void> {
   const entry = await findRecentAuditEntry(guild, added ? AuditLogEvent.MemberBanAdd : AuditLogEvent.MemberBanRemove, user.id);
-  await sendServerLog(client, added ? 'Membro bannato' : 'Ban rimosso', formatUser(user), added ? 0xed4245 : 0x57f287, [
+  await sendServerLog(client, guild.id, added ? 'Membro bannato' : 'Ban rimosso', formatUser(user), added ? 0xed4245 : 0x57f287, [
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
     { name: 'Motivo', value: entry?.reason ?? 'Nessun motivo specificato' },
   ]);
@@ -140,7 +144,7 @@ export async function logMemberUpdate(client: Client, oldMember: GuildMember | P
   if (removedRoles.length) changes.push(`Ruoli rimossi: ${removedRoles.join(', ')}`);
   if (!changes.length) return;
   const entry = await findRecentAuditEntry(newMember.guild, AuditLogEvent.MemberRoleUpdate, newMember.id) ?? await findRecentAuditEntry(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
-  await sendServerLog(client, 'Membro modificato', formatUser(newMember), 0xf1c40f, [
+  await sendServerLog(client, newMember.guild.id, 'Membro modificato', formatUser(newMember), 0xf1c40f, [
     { name: 'Modifiche', value: changes.join('\n') },
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
   ]);
@@ -153,7 +157,7 @@ export async function logRoleUpdate(client: Client, oldRole: Role, newRole: Role
   if (oldRole.permissions.bitfield !== newRole.permissions.bitfield) changes.push(`Permessi: ${rolePermissions(oldRole)} -> ${rolePermissions(newRole)}`);
   if (!changes.length) return;
   const entry = await findRecentAuditEntry(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
-  await sendServerLog(client, 'Ruolo modificato', `Ruolo: **${newRole.name}** (${newRole.id})`, 0x9b59b6, [
+  await sendServerLog(client, newRole.guild.id, 'Ruolo modificato', `Ruolo: **${newRole.name}** (${newRole.id})`, 0x9b59b6, [
     { name: 'Modifiche esplicite', value: changes.join('\n') },
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
   ]);
@@ -161,7 +165,7 @@ export async function logRoleUpdate(client: Client, oldRole: Role, newRole: Role
 
 export async function logRoleCreate(client: Client, role: Role): Promise<void> {
   const entry = await findRecentAuditEntry(role.guild, AuditLogEvent.RoleCreate, role.id);
-  await sendServerLog(client, 'Ruolo creato', `Ruolo: **${role.name}** (${role.id})`, 0x57f287, [
+  await sendServerLog(client, role.guild.id, 'Ruolo creato', `Ruolo: **${role.name}** (${role.id})`, 0x57f287, [
     { name: 'Permessi', value: rolePermissions(role) },
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
   ]);
@@ -169,7 +173,7 @@ export async function logRoleCreate(client: Client, role: Role): Promise<void> {
 
 export async function logRoleDelete(client: Client, role: Role): Promise<void> {
   const entry = await findRecentAuditEntry(role.guild, AuditLogEvent.RoleDelete, role.id);
-  await sendServerLog(client, 'Ruolo eliminato', `Ruolo: **${role.name}** (${role.id})`, 0xed4245, [
+  await sendServerLog(client, role.guild.id, 'Ruolo eliminato', `Ruolo: **${role.name}** (${role.id})`, 0xed4245, [
     { name: 'Permessi precedenti', value: rolePermissions(role) },
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
   ]);
@@ -177,7 +181,7 @@ export async function logRoleDelete(client: Client, role: Role): Promise<void> {
 
 export async function logChannelCreate(client: Client, channel: GuildChannel): Promise<void> {
   const entry = await findRecentAuditEntry(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
-  await sendServerLog(client, 'Canale creato', `**${channel.name}** (${channel.id})`, 0x57f287, [
+  await sendServerLog(client, channel.guild.id, 'Canale creato', `**${channel.name}** (${channel.id})`, 0x57f287, [
     { name: 'Tipo', value: channel.type.toString(), inline: true },
     { name: 'Eseguito da', value: formatAuditExecutor(entry), inline: true },
   ]);
@@ -185,7 +189,7 @@ export async function logChannelCreate(client: Client, channel: GuildChannel): P
 
 export async function logChannelDelete(client: Client, channel: GuildChannel): Promise<void> {
   const entry = await findRecentAuditEntry(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-  await sendServerLog(client, 'Canale eliminato', `**${channel.name}** (${channel.id})`, 0xed4245, [{ name: 'Eseguito da', value: formatAuditExecutor(entry) }]);
+  await sendServerLog(client, channel.guild.id, 'Canale eliminato', `**${channel.name}** (${channel.id})`, 0xed4245, [{ name: 'Eseguito da', value: formatAuditExecutor(entry) }]);
 }
 
 export async function logChannelUpdate(client: Client, oldChannel: GuildChannel, newChannel: GuildChannel): Promise<void> {
@@ -195,7 +199,7 @@ export async function logChannelUpdate(client: Client, oldChannel: GuildChannel,
   changes.push(...diffMap(channelOverwrites(oldChannel), channelOverwrites(newChannel)).map((change) => `Permessi canale: ${change}`));
   if (!changes.length) return;
   const entry = await findRecentAuditEntry(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
-  await sendServerLog(client, 'Canale modificato', `**${newChannel.name}** (${newChannel.id})`, 0xf1c40f, [
+  await sendServerLog(client, newChannel.guild.id, 'Canale modificato', `**${newChannel.name}** (${newChannel.id})`, 0xf1c40f, [
     { name: 'Modifiche esplicite', value: changes.join('\n') },
     { name: 'Eseguito da', value: formatAuditExecutor(entry) },
   ]);

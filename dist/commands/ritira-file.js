@@ -49,7 +49,7 @@ async function execute(interaction) {
     const password = interaction.options.getString('password', true);
     const requestedName = interaction.options.getString('nome_file', true);
     const fileName = (0, archive_1.normalizeArchiveName)(requestedName);
-    if (!(0, archive_1.hasArchiveAccess)(interaction.user.id, password)) {
+    if (!(0, archive_1.hasArchiveAccess)(password)) {
         await (0, archive_1.notifyArchiveOwner)(interaction.client, 'Download', interaction.user.id, false, 'Accesso negato.');
         await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
@@ -59,7 +59,7 @@ async function execute(interaction) {
         await interaction.reply({ content: '❌ Il nome del file non è valido.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
-    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'cssd-archive-download-'));
+    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'csd-archive-download-'));
     const tempFile = path.join(tempDir, fileName);
     await interaction.deferReply({ flags: discord_js_1.MessageFlags.Ephemeral });
     try {

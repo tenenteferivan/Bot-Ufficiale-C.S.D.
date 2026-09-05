@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
 import { mkdtemp, open, readFile, readdir, rm, stat, unlink, writeFile } from 'fs/promises';
 import * as os from 'os';
@@ -6,11 +6,13 @@ import * as path from 'path';
 import { pipeline } from 'stream/promises';
 import { Writable } from 'stream';
 import { Client } from 'discord.js';
+import { projectRoot } from './projectPaths';
 
-const archiveDirectory = path.resolve(process.cwd(), 'cripteddata');
-const tempDirectory = path.resolve(process.cwd(), 'tmp_archive');
-const fileHeader = Buffer.from('CSSDARCH1', 'ascii');
-const keySalt = Buffer.from('cssd-archivio-v1', 'utf8');
+const archiveDirectory = path.join(projectRoot, 'cripteddata');
+const tempDirectory = path.join(projectRoot, 'tmp_archive');
+export const MAX_ARCHIVE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const fileHeader = Buffer.from('CSDARCH1', 'ascii');
+const keySalt = Buffer.from('csd-archivio-v1', 'utf8');
 const algorithm = 'aes-256-gcm';
 const ivLength = 12;
 const tagLength = 16;
@@ -30,15 +32,12 @@ function getArchivePassword(): string {
   return process.env.PASSWORD_ARCHIVIO ?? '';
 }
 
-export function hasArchiveAccess(userId: string, password: string): boolean {
-  const authorizedIds = (process.env.ACCESSO_ARCHIVIO_ID ?? '')
-    .split(',')
-    .map((id) => id.trim())
-    .filter(Boolean);
-
-  return authorizedIds.includes(userId)
-    && getArchivePassword().length > 0
-    && password === getArchivePassword();
+export function hasArchiveAccess(password: string): boolean {
+  const archivePassword = getArchivePassword();
+  if (!archivePassword) return false;
+  const provided = Buffer.from(password);
+  const expected = Buffer.from(archivePassword);
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 export function normalizeArchiveName(name: string): string | null {
@@ -67,7 +66,7 @@ async function ensureArchiveDirectories(): Promise<void> {
 }
 
 export async function saveEncryptedArchive(name: string, content: Buffer): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'cssd-archive-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'csd-archive-'));
   const tempFile = path.join(tempDir, 'upload.bin');
   await writeFile(tempFile, content);
   try {
@@ -78,7 +77,7 @@ export async function saveEncryptedArchive(name: string, content: Buffer): Promi
 }
 
 export async function readDecryptedArchive(name: string): Promise<Buffer> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'cssd-read-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'csd-read-'));
   const tempFile = path.join(tempDir, 'download.bin');
   try {
     await decryptFileStream(name, tempFile);

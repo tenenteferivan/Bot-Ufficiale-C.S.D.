@@ -1,6 +1,7 @@
 import { REST, Routes, SlashCommandBuilder } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getTicketGuildId, ticketCommandNames } from './utils/ticketScope';
 
 interface CommandModule {
   data: SlashCommandBuilder;
@@ -53,8 +54,6 @@ export async function deployCommands(): Promise<void> {
   console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
 
   try {
-    await rest.put(Routes.applicationCommands(clientId), { body: [] });
-
     const commandsPayload: object[] = [];
     let slashCount = 0;
 
@@ -94,10 +93,24 @@ export async function deployCommands(): Promise<void> {
       }
     }
 
-    const data = (await rest.put(Routes.applicationCommands(clientId), { body: commandsPayload })) as object[];
+    const ticketGuildId = getTicketGuildId();
+    
+    const globalCommands = commandsPayload.filter((cmd: any) => !ticketCommandNames.has(cmd.name));
+    const ticketCommands = commandsPayload.filter((cmd: any) => ticketCommandNames.has(cmd.name));
+
+    // Registra comandi globali
+    const globalData = (await rest.put(Routes.applicationCommands(clientId), { body: globalCommands })) as object[];
+
+    // Registra comandi di ticket a livello di guild (se configurato)
+    if (ticketGuildId && ticketCommands.length > 0) {
+      const deployedTicketCommands = await rest.put(Routes.applicationGuildCommands(clientId, ticketGuildId), { body: ticketCommands }) as object[];
+      console.log(`Comandi ticket pubblicati nella guild configurata: ${deployedTicketCommands.length}.`);
+    } else if (!ticketGuildId) {
+      console.warn('TICKET_GUILD_ID non configurato: i comandi ticket non verranno pubblicati.');
+    }
 
     console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
-    console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} ${style.green}${data.length}${style.reset} Comandi Sincronizzati con Successo     ${style.cyan}│${style.reset}`);
+    console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} ${style.green}${globalData.length}${style.reset} Comandi globali + ${style.green}${ticketCommands.length}${style.reset} Comandi ticket${style.reset}    ${style.cyan}│${style.reset}`);
     console.log(`${style.cyan}╰─────────────────────────────────────────────────────────────╯${style.reset}\n`);
   } catch (error) {
     console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);

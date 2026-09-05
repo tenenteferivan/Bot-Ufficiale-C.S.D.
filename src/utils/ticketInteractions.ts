@@ -15,6 +15,7 @@ import {
   createTicketRecord,
   getTicket,
   getTicketConfig,
+  isTicketGuild,
   isStaff,
   releaseClaim,
   reserveTicketNumber,
@@ -31,6 +32,11 @@ function safeChannelPart(value: string): string {
 }
 
 export async function handleTicketInteraction(interaction: Interaction): Promise<boolean> {
+  const isTicketComponent = interaction.isStringSelectMenu() || interaction.isButton() || interaction.isModalSubmit();
+  if (isTicketComponent && interaction.customId.startsWith('ticket:') && !isTicketGuild(interaction.guildId)) {
+    await interaction.reply({ content: 'Il sistema ticket e disponibile solo nel server configurato.', flags: MessageFlags.Ephemeral });
+    return true;
+  }
   if (interaction.isStringSelectMenu() && interaction.customId === 'ticket:category') {
     await createTicketFromSelection(interaction);
     return true;
@@ -108,14 +114,11 @@ async function claimTicket(interaction: ButtonInteraction): Promise<void> {
     await interaction.reply({ content: '❌ Solo lo staff configurato può reclamare il ticket.', flags: MessageFlags.Ephemeral });
     return;
   }
-  if (ticket.claimedBy) {
-    await interaction.reply({ content: `ℹ️ Ticket già preso in carico da <@${ticket.claimedBy}>.`, flags: MessageFlags.Ephemeral });
-    return;
-  }
-
   await interaction.deferReply();
-  await applyClaim(interaction.channel, ticket, config, interaction.member as GuildMember);
-  await interaction.editReply(`🙋 Ticket preso in carico da ${interaction.user}. Gli altri membri dello staff non possono più visualizzarlo.`);
+  const claimed = await applyClaim(interaction.channel, ticket, config, interaction.member as GuildMember);
+  await interaction.editReply(claimed
+    ? `Ticket preso in carico da ${interaction.user}. Gli altri membri dello staff non possono piu visualizzarlo.`
+    : 'Il ticket e gia stato preso in carico da un altro membro dello staff.');
 }
 
 async function closeTicketRequest(interaction: ButtonInteraction): Promise<void> {
@@ -149,7 +152,7 @@ async function closeTicket(interaction: ModalSubmitInteraction): Promise<void> {
   const reason = interaction.fields.getTextInputValue('reason').trim();
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
-    await sendTicketTranscript(interaction.client, interaction.channel as any, ticket, interaction.user, reason);
+    await sendTicketTranscript(interaction.channel as any, ticket, interaction.user, reason);
   } catch (error) {
     console.error('Errore durante la generazione del transcript ticket:', error);
   }

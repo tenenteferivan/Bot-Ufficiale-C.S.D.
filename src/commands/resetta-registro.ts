@@ -1,0 +1,189 @@
+import {
+  ChatInputCommandInteraction,
+  SlashCommandBuilder,
+  EmbedBuilder,
+  MessageFlags,
+} from 'discord.js';
+
+import { isOperator } from '../utils/userRecord';
+import { db } from '../handlers/databasehandler';
+
+// Creazione comando
+export const data = new SlashCommandBuilder()
+  .setName('resetta-registro')
+  .setDescription('Resetta completamente il registro di un utente (Solo OPERATOR).')
+  .addStringOption((option) =>
+    option
+      .setName('utente')
+      .setDescription('Mention o ID dell\'utente')
+      .setRequired(true)
+  );
+
+export async function execute(
+  interaction: ChatInputCommandInteraction
+): Promise<void> {
+
+  // Controlla che chi esegue il comando abbia il ruolo OPERATOR
+  if (!isOperator(interaction.member)) {
+    await interaction.reply({
+      content:
+        '❌ Non disponi del ruolo o delle autorizzazioni necessarie per utilizzare questo comando.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Controlla che il comando venga eseguito dentro un server
+  if (!interaction.guild) {
+    await interaction.reply({
+      content: '❌ Questo comando è disponibile solo nei server.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Recupera la stringa inserita dall'operatore
+  const input = interaction.options
+    .getString('utente', true)
+    .trim();
+
+  let userId: string;
+
+  // Controlla se è una mention Discord
+  const mentionMatch = input.match(/^<@!?(\d+)>$/);
+
+  if (mentionMatch) {
+    userId = mentionMatch[1];
+  } else if (/^\d+$/.test(input)) {
+    // Controlla se è un ID Discord
+    userId = input;
+  } else {
+    await interaction.reply({
+      content: '❌ Inserisci una mention o un ID utente valido.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  try {
+
+    // Recupera l'utente Discord
+    const targetUser = await interaction.client.users.fetch(userId);
+
+    // Controlla che l'utente faccia effettivamente parte del server
+    await interaction.guild.members.fetch(targetUser.id);
+
+    /*
+     * 1. Elimina tutte le sanzioni dell'utente
+     *    dalla tabella user_sanctions.
+     */
+    await new Promise<void>((resolve, reject) => {
+      db.run(
+        `DELETE FROM user_sanctions
+         WHERE guild_id = ? AND user_id = ?`,
+        [interaction.guild!.id, targetUser.id],
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        }
+      );
+    });
+
+    /*
+     * 2. Resetta completamente il registro principale
+     *    dell'utente nella tabella user_records.
+     */
+    await new Promise<void>((resolve, reject) => {
+      db.run(
+        `UPDATE user_records
+         SET
+           points = 20.0,
+           max_points = 20.0,
+           sanctions_history = '',
+           notes = '',
+           reports = '',
+           status = ''
+         WHERE guild_id = ? AND user_id = ?`,
+        [interaction.guild!.id, targetUser.id],
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        }
+      );
+    });
+
+    await new Promise<void>((resolve, reject) => {
+  db.run(
+    `DELETE FROM user_notes
+     WHERE guild_id = ? AND user_id = ?`,
+    [interaction.guild!.id, targetUser.id],
+    (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    }
+  );
+});
+
+
+    // Crea il messaggio di conferma
+    const embed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('🟢 Registro Resettato')
+      .setDescription(
+        `Il registro di ${targetUser} è stato completamente resettato.`
+      )
+      .addFields(
+        {
+          name: '👤 Utente',
+          value: `${targetUser}`,
+          inline: true,
+        },
+        {
+          name: '📊 Punti',
+          value: '20.0 / 20.0',
+          inline: true,
+        },
+        {
+          name: '🧹 Sanzioni',
+          value: 'Tutte eliminate',
+          inline: true,
+        }
+      )
+      .setFooter({
+        text: 'Sistema Punti C.S.D.',
+      })
+      .setTimestamp();
+
+    // Invia il risultato solamente dopo aver completato il reset
+    await interaction.reply({
+      embeds: [embed],
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Errore durante il reset del registro utente:',
+      error
+    );
+
+    await interaction.reply({
+      content:
+        '❌ Si è verificato un errore durante il reset del registro dell\'utente.',
+      flags: MessageFlags.Ephemeral,
+    });
+
+    return;
+  }
+}

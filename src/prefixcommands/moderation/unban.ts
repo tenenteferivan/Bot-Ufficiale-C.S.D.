@@ -1,5 +1,4 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 
 export const name = 'unban';
 
@@ -19,14 +18,6 @@ export async function execute(message: Message, args: string[]): Promise<void> {
 
   try {
     await message.guild?.members.unban(userId, reason);
-    await saveSanction({
-      userId,
-      moderatorId: message.author.id,
-      guildId: message.guild!.id,
-      type: 'UNBAN',
-      reason,
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0x57F287)
       .setTitle('🔓 • REVOCA SANZIONE: UNBAN')

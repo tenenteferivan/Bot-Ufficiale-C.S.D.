@@ -12,7 +12,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const requestedName = interaction.options.getString('nome', true);
   const fileName = normalizeArchiveName(requestedName);
 
-  if (!hasArchiveAccess(interaction.user.id, password)) {
+  if (!hasArchiveAccess(password)) {
     await notifyArchiveOwner(interaction.client, 'Eliminazione', interaction.user.id, false, 'Accesso negato.');
     await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: MessageFlags.Ephemeral });
     return;

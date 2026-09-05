@@ -1,5 +1,4 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 
 export const name = 'untimeout';
 export const aliases = ['rto'];
@@ -20,14 +19,6 @@ export async function execute(message: Message, args: string[]): Promise<void> {
 
   try {
     await target.timeout(null, reason);
-    await saveSanction({
-      userId: target.id,
-      moderatorId: message.author.id,
-      guildId: message.guild!.id,
-      type: 'UNTIMEOUT',
-      reason,
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0x57F287)
       .setTitle('🔊 • REVOCA SANZIONE: UNTIMEOUT')

@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.data = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
-const databasehandler_1 = require("../../handlers/databasehandler");
+const permissions_1 = require("../../utils/permissions");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('ban')
     .setDescription('Bandisce un utente dal server in modo temporaneo o permanente.')
@@ -12,6 +12,8 @@ exports.data = new discord_js_1.SlashCommandBuilder()
     .addStringOption((opt) => opt.setName('motivo').setDescription('Il motivo del ban').setRequired(true))
     .addStringOption((opt) => opt.setName('durata').setDescription('Durata temporanea (es. 1d, 2h). Lascia vuoto per permanente').setRequired(false));
 async function execute(interaction) {
+    if (!await (0, permissions_1.requireGuildPermission)(interaction, discord_js_1.PermissionFlagsBits.BanMembers))
+        return;
     const targetUser = interaction.options.getUser('utente', true);
     const reason = interaction.options.getString('motivo', true);
     const durationStr = interaction.options.getString('durata') || 'Permanente';
@@ -19,14 +21,6 @@ async function execute(interaction) {
         return;
     try {
         await interaction.guild.members.ban(targetUser.id, { reason });
-        await (0, databasehandler_1.saveSanction)({
-            userId: targetUser.id,
-            moderatorId: interaction.user.id,
-            guildId: interaction.guild.id,
-            type: 'BAN',
-            reason,
-            duration: durationStr,
-        });
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0xED4245)
             .setTitle('🔨 • SANZIONE APPLICATA: BAN')

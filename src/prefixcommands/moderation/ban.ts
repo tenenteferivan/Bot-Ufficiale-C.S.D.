@@ -1,5 +1,4 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 
 export const name = 'ban';
 
@@ -19,15 +18,6 @@ export async function execute(message: Message, args: string[]): Promise<void> {
 
   try {
     await message.guild?.members.ban(target.id, { reason });
-    await saveSanction({
-      userId: target.id,
-      moderatorId: message.author.id,
-      guildId: message.guild!.id,
-      type: 'BAN',
-      reason,
-      duration: 'Permanente',
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0xED4245)
       .setTitle('🔨 • SANZIONE APPLICATA: BAN')

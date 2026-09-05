@@ -12,8 +12,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { deployCommands } from './deploycommands';
 import { sendModNotification } from './utils/modLogger';
-import { checkAutoMod } from './utils/automod';
 import { handleTicketInteraction } from './utils/ticketInteractions';
+import { handlePartnershipInteraction } from './utils/partnershipInteractions';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
@@ -125,6 +125,7 @@ client.once('clientReady', async () => {
 
 // Gestore unico delle interazioni (Slash + autocompletamento)
 client.on('interactionCreate', async (interaction: Interaction) => {
+  if (await handlePartnershipInteraction(interaction)) return;
   if (await handleTicketInteraction(interaction)) return;
 
   // Gestione dell'autocompletamento
@@ -153,7 +154,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     // 2. Intercettore globale di moderazione: valuta e invia il messaggio privato quando necessario.
     await sendModNotification(interaction);
     if (interaction.guild) {
-      await logCommand(client, interaction.commandName, interaction.user, interaction.guild.name);
+      await logCommand(client, interaction.commandName, interaction.user, interaction.guild.id);
     }
   } catch (error) {
     console.error(`Errore durante l'esecuzione del comando Slash /${interaction.commandName}:`, error);
@@ -177,11 +178,7 @@ client.on('messageCreate', async (message) => {
   // Ignora i bot
   if (message.author.bot) return;
 
-  // Esegue il filtro AutoMod
-  const isBadWord = await checkAutoMod(message);
-  
-  // Se è stata rilevata una parola vietata, il messaggio è già stato eliminato e sanzionato.
-  if (isBadWord) return;
+
 
   // Logica per i comandi con prefisso
   const prefix = PREFIX; // Usa il prefisso configurato.
@@ -197,7 +194,7 @@ client.on('messageCreate', async (message) => {
   try {
     await command.execute(message, args);
     if (message.guild) {
-      await logCommand(client, command.name, message.author, message.guild.name);
+      await logCommand(client, command.name, message.author, message.guild.id);
     }
   } catch (error) {
     console.error(`Errore durante l'esecuzione del comando con prefisso ${commandName}:`, error);

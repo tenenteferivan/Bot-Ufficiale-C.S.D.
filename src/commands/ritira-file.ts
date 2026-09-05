@@ -15,7 +15,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const requestedName = interaction.options.getString('nome_file', true);
   const fileName = normalizeArchiveName(requestedName);
 
-  if (!hasArchiveAccess(interaction.user.id, password)) {
+  if (!hasArchiveAccess(password)) {
     await notifyArchiveOwner(interaction.client, 'Download', interaction.user.id, false, 'Accesso negato.');
     await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: MessageFlags.Ephemeral });
     return;
@@ -27,7 +27,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'cssd-archive-download-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'csd-archive-download-'));
   const tempFile = path.join(tempDir, fileName);
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });

@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import { encryptFileStream, hasArchiveAccess, normalizeArchiveName, notifyArchiveOwner, saveArchiveMetadata } from '../utils/archive';
+import { encryptFileStream, hasArchiveAccess, MAX_ARCHIVE_ATTACHMENT_BYTES, normalizeArchiveName, notifyArchiveOwner, saveArchiveMetadata } from '../utils/archive';
 
 export const data = new SlashCommandBuilder()
   .setName('aggiungi-archivio')
@@ -20,7 +20,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const attachment = interaction.options.getAttachment('file_allegato', true);
   const fileName = normalizeArchiveName(requestedName);
 
-  if (!hasArchiveAccess(interaction.user.id, password)) {
+  if (!hasArchiveAccess(password)) {
     await notifyArchiveOwner(interaction.client, 'Caricamento', interaction.user.id, false, 'Accesso negato.');
     await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: MessageFlags.Ephemeral });
     return;
@@ -32,8 +32,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
+  if (attachment.size > MAX_ARCHIVE_ATTACHMENT_BYTES) {
+    await interaction.reply({ content: '❌ Il file supera il limite di 25 MB dell\'archivio.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'cssd-archive-upload-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'csd-archive-upload-'));
   const tempFile = path.join(tempDir, 'source.bin');
 
   try {

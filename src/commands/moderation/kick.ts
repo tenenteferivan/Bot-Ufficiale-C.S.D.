@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
+import { requireGuildPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('kick')
@@ -9,6 +9,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) => opt.setName('motivo').setDescription('Il motivo dell\'espulsione').setRequired(true));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!await requireGuildPermission(interaction, PermissionFlagsBits.KickMembers)) return;
   const targetUser = interaction.options.getUser('utente', true);
   const reason = interaction.options.getString('motivo', true);
 
@@ -17,14 +18,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   try {
     const member = await interaction.guild.members.fetch(targetUser.id);
     await member.kick(reason);
-
-    await saveSanction({
-      userId: targetUser.id,
-      moderatorId: interaction.user.id,
-      guildId: interaction.guild.id,
-      type: 'KICK',
-      reason,
-    });
 
     const embed = new EmbedBuilder()
       .setColor(0xFEE75C)

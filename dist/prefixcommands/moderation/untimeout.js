@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.aliases = exports.name = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
-const databasehandler_1 = require("../../handlers/databasehandler");
 exports.name = 'untimeout';
 exports.aliases = ['rto'];
 async function execute(message, args) {
@@ -19,13 +18,6 @@ async function execute(message, args) {
     const reason = args.slice(1).join(' ');
     try {
         await target.timeout(null, reason);
-        await (0, databasehandler_1.saveSanction)({
-            userId: target.id,
-            moderatorId: message.author.id,
-            guildId: message.guild.id,
-            type: 'UNTIMEOUT',
-            reason,
-        });
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0x57F287)
             .setTitle('🔊 • REVOCA SANZIONE: UNTIMEOUT')

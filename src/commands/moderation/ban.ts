@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
+import { requireGuildPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('ban')
@@ -10,6 +10,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) => opt.setName('durata').setDescription('Durata temporanea (es. 1d, 2h). Lascia vuoto per permanente').setRequired(false));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!await requireGuildPermission(interaction, PermissionFlagsBits.BanMembers)) return;
   const targetUser = interaction.options.getUser('utente', true);
   const reason = interaction.options.getString('motivo', true);
   const durationStr = interaction.options.getString('durata') || 'Permanente';
@@ -18,15 +19,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   try {
     await interaction.guild.members.ban(targetUser.id, { reason });
-
-    await saveSanction({
-      userId: targetUser.id,
-      moderatorId: interaction.user.id,
-      guildId: interaction.guild.id,
-      type: 'BAN',
-      reason,
-      duration: durationStr,
-    });
 
     const embed = new EmbedBuilder()
       .setColor(0xED4245)

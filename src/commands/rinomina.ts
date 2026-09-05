@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { getTicket, getTicketConfig, isStaff } from '../utils/ticketManager';
+import { getTicket, getTicketConfig, isStaff, isTicketGuild } from '../utils/ticketManager';
 
 export const data = new SlashCommandBuilder()
   .setName('rinomina')
@@ -8,6 +8,10 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guild || !interaction.channel || !interaction.member || !('setName' in interaction.channel)) return;
+  if (!isTicketGuild(interaction.guild.id)) {
+    await interaction.reply({ content: 'Il sistema ticket e disponibile solo nel server configurato.', flags: MessageFlags.Ephemeral });
+    return;
+  }
   const ticket = await getTicket(interaction.channel.id);
   const config = await getTicketConfig(interaction.guild.id);
   if (!ticket || !config) {

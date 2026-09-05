@@ -8,6 +8,11 @@ function safeChannelPart(value) {
     return value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'utente';
 }
 async function handleTicketInteraction(interaction) {
+    const isTicketComponent = interaction.isStringSelectMenu() || interaction.isButton() || interaction.isModalSubmit();
+    if (isTicketComponent && interaction.customId.startsWith('ticket:') && !(0, ticketManager_1.isTicketGuild)(interaction.guildId)) {
+        await interaction.reply({ content: 'Il sistema ticket e disponibile solo nel server configurato.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return true;
+    }
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket:category') {
         await createTicketFromSelection(interaction);
         return true;
@@ -82,13 +87,11 @@ async function claimTicket(interaction) {
         await interaction.reply({ content: '❌ Solo lo staff configurato può reclamare il ticket.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
-    if (ticket.claimedBy) {
-        await interaction.reply({ content: `ℹ️ Ticket già preso in carico da <@${ticket.claimedBy}>.`, flags: discord_js_1.MessageFlags.Ephemeral });
-        return;
-    }
     await interaction.deferReply();
-    await (0, ticketManager_1.applyClaim)(interaction.channel, ticket, config, interaction.member);
-    await interaction.editReply(`🙋 Ticket preso in carico da ${interaction.user}. Gli altri membri dello staff non possono più visualizzarlo.`);
+    const claimed = await (0, ticketManager_1.applyClaim)(interaction.channel, ticket, config, interaction.member);
+    await interaction.editReply(claimed
+        ? `Ticket preso in carico da ${interaction.user}. Gli altri membri dello staff non possono piu visualizzarlo.`
+        : 'Il ticket e gia stato preso in carico da un altro membro dello staff.');
 }
 async function closeTicketRequest(interaction) {
     if (!interaction.guild || !interaction.channel || !interaction.member) {
@@ -120,7 +123,7 @@ async function closeTicket(interaction) {
     const reason = interaction.fields.getTextInputValue('reason').trim();
     await interaction.deferReply({ flags: discord_js_1.MessageFlags.Ephemeral });
     try {
-        await (0, ticketTranscript_1.sendTicketTranscript)(interaction.client, interaction.channel, ticket, interaction.user, reason);
+        await (0, ticketTranscript_1.sendTicketTranscript)(interaction.channel, ticket, interaction.user, reason);
     }
     catch (error) {
         console.error('Errore durante la generazione del transcript ticket:', error);

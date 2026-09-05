@@ -1,5 +1,4 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 import { parseDuration } from '../../utils/timeParser';
 
 export const name = 'timeout';
@@ -28,15 +27,6 @@ export async function execute(message: Message, args: string[]): Promise<void> {
 
   try {
     await target.timeout(durationMs, reason);
-    await saveSanction({
-      userId: target.id,
-      moderatorId: message.author.id,
-      guildId: message.guild!.id,
-      type: 'TIMEOUT',
-      reason,
-      duration: durationStr,
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0xE91E63)
       .setTitle('🔇 • SANZIONE APPLICATA: TIMEOUT')

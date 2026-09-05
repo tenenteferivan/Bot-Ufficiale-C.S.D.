@@ -1,5 +1,4 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 
 export const name = 'kick';
 
@@ -19,14 +18,6 @@ export async function execute(message: Message, args: string[]): Promise<void> {
 
   try {
     await target.kick(reason);
-    await saveSanction({
-      userId: target.id,
-      moderatorId: message.author.id,
-      guildId: message.guild!.id,
-      type: 'KICK',
-      reason,
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0xFEE75C)
       .setTitle('🚪 • SANZIONE APPLICATA: KICK')

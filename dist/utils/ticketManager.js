@@ -1,12 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ticketCategories = void 0;
+exports.ticketCategories = exports.isTicketGuild = void 0;
 exports.getTicketConfig = getTicketConfig;
 exports.saveTicketConfig = saveTicketConfig;
 exports.reserveTicketNumber = reserveTicketNumber;
 exports.createTicketRecord = createTicketRecord;
 exports.getTicket = getTicket;
-exports.setTicketClaim = setTicketClaim;
 exports.closeTicketRecord = closeTicketRecord;
 exports.listOpenTickets = listOpenTickets;
 exports.ticketPanelComponents = ticketPanelComponents;
@@ -20,12 +19,14 @@ exports.closeModal = closeModal;
 exports.categoryFromValue = categoryFromValue;
 const discord_js_1 = require("discord.js");
 const databasehandler_1 = require("../handlers/databasehandler");
+var ticketScope_1 = require("./ticketScope");
+Object.defineProperty(exports, "isTicketGuild", { enumerable: true, get: function () { return ticketScope_1.isTicketGuild; } });
 exports.ticketCategories = {
     amministrazione: { label: 'Amministrazione', emoji: '🛡️', description: 'Questioni burocratiche, gestionali o riservate.' },
     assistenza: { label: 'Assistenza Generale', emoji: '💬', description: 'Dubbi, informazioni e supporto sul server.' },
     partnership: { label: 'Partnership / Collaborazione', emoji: '🤝', description: 'Proposte commerciali, affiliati o collaborazioni.' },
     segnalazione: { label: 'Segnalazione', emoji: '🚨', description: 'Violazioni del regolamento o utenti problematici.' },
-    servizi: { label: 'Servizi', emoji: '⚙️', description: 'Supporto sui servizi della community.' },
+    richiesta_entrata: { label: 'Richiesta Entrata', emoji: '📝', description: 'Richiesta entrata Nella Confederazione.' },
 };
 function run(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -98,9 +99,6 @@ async function getTicket(channelId) {
         createdAt: row.created_at,
     };
 }
-function setTicketClaim(channelId, claimedBy) {
-    return run('UPDATE tickets SET claimed_by = ? WHERE channel_id = ? AND status = \'open\'', [claimedBy, channelId]);
-}
 function closeTicketRecord(channelId) {
     return run('UPDATE tickets SET status = \'closed\' WHERE channel_id = ?', [channelId]);
 }
@@ -136,9 +134,9 @@ function ticketEmbed(category, ticketNumber) {
     const details = exports.ticketCategories[category];
     return new discord_js_1.EmbedBuilder()
         .setColor(0x2b2d31)
-        .setTitle(`${details.emoji} Supporto C.S.S.D. ${ticketNumber ? `#${String(ticketNumber).padStart(4, '0')}` : ''}`)
+        .setTitle(`${details.emoji} Supporto C.S.D. ${ticketNumber ? `#${String(ticketNumber).padStart(4, '0')}` : ''}`)
         .setDescription(`Categoria: **${details.label}**\n${details.description}\n\nDescrivi qui la tua richiesta in modo dettagliato. Un membro dello staff ti risponderà appena possibile.`)
-        .setFooter({ text: 'C.S.S.D. Supporto' })
+        .setFooter({ text: 'C.S.D. Supporto' })
         .setTimestamp();
 }
 function ticketOverwrites(guild, openerId, staffRoleId) {
@@ -149,15 +147,26 @@ function ticketOverwrites(guild, openerId, staffRoleId) {
     ];
 }
 async function applyClaim(channel, ticket, config, member) {
-    await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
-    await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-    await channel.permissionOverwrites.edit(member.id, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-    await setTicketClaim(ticket.channelId, member.id);
+    const claimed = await new Promise((resolve, reject) => {
+        databasehandler_1.db.run("UPDATE tickets SET claimed_by = ? WHERE channel_id = ? AND status = 'open' AND claimed_by IS NULL", [member.id, ticket.channelId], function (error) { error ? reject(error) : resolve(this.changes === 1); });
+    });
+    if (!claimed)
+        return false;
+    try {
+        await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
+        await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
+        await channel.permissionOverwrites.edit(member.id, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
+        return true;
+    }
+    catch (error) {
+        await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND claimed_by = ?", [ticket.channelId, member.id]);
+        throw error;
+    }
 }
 async function releaseClaim(channel, ticket, config) {
     await channel.permissionOverwrites.delete(ticket.claimedBy ?? '');
     await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-    await setTicketClaim(ticket.channelId, null);
+    await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND status = 'open'", [ticket.channelId]);
 }
 function isStaff(member, config) {
     return member.roles.cache.has(config.staffRoleId) || member.permissions.has(discord_js_1.PermissionFlagsBits.Administrator);

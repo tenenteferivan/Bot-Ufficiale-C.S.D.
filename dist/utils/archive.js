@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.MAX_ARCHIVE_ATTACHMENT_BYTES = void 0;
 exports.hasArchiveAccess = hasArchiveAccess;
 exports.normalizeArchiveName = normalizeArchiveName;
 exports.saveEncryptedArchive = saveEncryptedArchive;
@@ -50,24 +51,25 @@ const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const promises_2 = require("stream/promises");
 const stream_1 = require("stream");
-const archiveDirectory = path.resolve(process.cwd(), 'cripteddata');
-const tempDirectory = path.resolve(process.cwd(), 'tmp_archive');
-const fileHeader = Buffer.from('CSSDARCH1', 'ascii');
-const keySalt = Buffer.from('cssd-archivio-v1', 'utf8');
+const projectPaths_1 = require("./projectPaths");
+const archiveDirectory = path.join(projectPaths_1.projectRoot, 'cripteddata');
+const tempDirectory = path.join(projectPaths_1.projectRoot, 'tmp_archive');
+exports.MAX_ARCHIVE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const fileHeader = Buffer.from('CSDARCH1', 'ascii');
+const keySalt = Buffer.from('csd-archivio-v1', 'utf8');
 const algorithm = 'aes-256-gcm';
 const ivLength = 12;
 const tagLength = 16;
 function getArchivePassword() {
     return process.env.PASSWORD_ARCHIVIO ?? '';
 }
-function hasArchiveAccess(userId, password) {
-    const authorizedIds = (process.env.ACCESSO_ARCHIVIO_ID ?? '')
-        .split(',')
-        .map((id) => id.trim())
-        .filter(Boolean);
-    return authorizedIds.includes(userId)
-        && getArchivePassword().length > 0
-        && password === getArchivePassword();
+function hasArchiveAccess(password) {
+    const archivePassword = getArchivePassword();
+    if (!archivePassword)
+        return false;
+    const provided = Buffer.from(password);
+    const expected = Buffer.from(archivePassword);
+    return provided.length === expected.length && (0, crypto_1.timingSafeEqual)(provided, expected);
 }
 function normalizeArchiveName(name) {
     const normalized = name.trim().replace(/[^a-zA-Z0-9._ -]/g, '_').replace(/^\.+/, '');
@@ -91,7 +93,7 @@ async function ensureArchiveDirectories() {
     ]);
 }
 async function saveEncryptedArchive(name, content) {
-    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'cssd-archive-'));
+    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'csd-archive-'));
     const tempFile = path.join(tempDir, 'upload.bin');
     await (0, promises_1.writeFile)(tempFile, content);
     try {
@@ -102,7 +104,7 @@ async function saveEncryptedArchive(name, content) {
     }
 }
 async function readDecryptedArchive(name) {
-    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'cssd-read-'));
+    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'csd-read-'));
     const tempFile = path.join(tempDir, 'download.bin');
     try {
         await decryptFileStream(name, tempFile);

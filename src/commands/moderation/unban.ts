@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
+import { requireGuildPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('unban')
@@ -9,6 +9,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) => opt.setName('motivo').setDescription('Motivo della revoca del ban').setRequired(true));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!await requireGuildPermission(interaction, PermissionFlagsBits.BanMembers)) return;
   const userId = interaction.options.getString('utente', true);
   const reason = interaction.options.getString('motivo', true);
 
@@ -16,14 +17,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   try {
     await interaction.guild.members.unban(userId, reason);
-
-    await saveSanction({
-      userId,
-      moderatorId: interaction.user.id,
-      guildId: interaction.guild.id,
-      type: 'UNBAN',
-      reason,
-    });
 
     const embed = new EmbedBuilder()
       .setColor(0x57F287)

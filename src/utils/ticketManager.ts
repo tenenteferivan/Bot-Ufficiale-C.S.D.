@@ -15,13 +15,14 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import { db } from '../handlers/databasehandler';
+export { isTicketGuild } from './ticketScope';
 
 export const ticketCategories = {
   amministrazione: { label: 'Amministrazione', emoji: '🛡️', description: 'Questioni burocratiche, gestionali o riservate.' },
   assistenza: { label: 'Assistenza Generale', emoji: '💬', description: 'Dubbi, informazioni e supporto sul server.' },
   partnership: { label: 'Partnership / Collaborazione', emoji: '🤝', description: 'Proposte commerciali, affiliati o collaborazioni.' },
   segnalazione: { label: 'Segnalazione', emoji: '🚨', description: 'Violazioni del regolamento o utenti problematici.' },
-  servizi: { label: 'Servizi', emoji: '⚙️', description: 'Supporto sui servizi della community.' },
+  richiesta_entrata: { label: 'Richiesta Entrata', emoji: '📝', description: 'Richiesta entrata Nella Confederazione.' },
 } as const;
 
 export type TicketCategory = keyof typeof ticketCategories;
@@ -135,10 +136,6 @@ export async function getTicket(channelId: string): Promise<TicketRecord | null>
   };
 }
 
-export function setTicketClaim(channelId: string, claimedBy: string | null): Promise<void> {
-  return run('UPDATE tickets SET claimed_by = ? WHERE channel_id = ? AND status = \'open\'', [claimedBy, channelId]);
-}
-
 export function closeTicketRecord(channelId: string): Promise<void> {
   return run('UPDATE tickets SET status = \'closed\' WHERE channel_id = ?', [channelId]);
 }
@@ -181,9 +178,9 @@ export function ticketEmbed(category: TicketCategory, ticketNumber?: number): Em
   const details = ticketCategories[category];
   return new EmbedBuilder()
     .setColor(0x2b2d31)
-    .setTitle(`${details.emoji} Supporto C.S.S.D. ${ticketNumber ? `#${String(ticketNumber).padStart(4, '0')}` : ''}`)
+    .setTitle(`${details.emoji} Supporto C.S.D. ${ticketNumber ? `#${String(ticketNumber).padStart(4, '0')}` : ''}`)
     .setDescription(`Categoria: **${details.label}**\n${details.description}\n\nDescrivi qui la tua richiesta in modo dettagliato. Un membro dello staff ti risponderà appena possibile.`)
-    .setFooter({ text: 'C.S.S.D. Supporto' })
+    .setFooter({ text: 'C.S.D. Supporto' })
     .setTimestamp();
 }
 
@@ -195,17 +192,31 @@ export function ticketOverwrites(guild: Guild, openerId: string, staffRoleId: st
   ];
 }
 
-export async function applyClaim(channel: any, ticket: TicketRecord, config: TicketConfig, member: GuildMember): Promise<void> {
-  await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
-  await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-  await channel.permissionOverwrites.edit(member.id, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-  await setTicketClaim(ticket.channelId, member.id);
+export async function applyClaim(channel: any, ticket: TicketRecord, config: TicketConfig, member: GuildMember): Promise<boolean> {
+  const claimed = await new Promise<boolean>((resolve, reject) => {
+    db.run(
+      "UPDATE tickets SET claimed_by = ? WHERE channel_id = ? AND status = 'open' AND claimed_by IS NULL",
+      [member.id, ticket.channelId],
+      function (error) { error ? reject(error) : resolve(this.changes === 1); },
+    );
+  });
+  if (!claimed) return false;
+
+  try {
+    await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
+    await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
+    await channel.permissionOverwrites.edit(member.id, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
+    return true;
+  } catch (error) {
+    await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND claimed_by = ?", [ticket.channelId, member.id]);
+    throw error;
+  }
 }
 
 export async function releaseClaim(channel: any, ticket: TicketRecord, config: TicketConfig): Promise<void> {
   await channel.permissionOverwrites.delete(ticket.claimedBy ?? '');
   await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
-  await setTicketClaim(ticket.channelId, null);
+  await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND status = 'open'", [ticket.channelId]);
 }
 
 export function isStaff(member: GuildMember, config: TicketConfig): boolean {

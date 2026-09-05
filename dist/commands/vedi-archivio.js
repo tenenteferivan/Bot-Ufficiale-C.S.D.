@@ -10,7 +10,7 @@ exports.data = new discord_js_1.SlashCommandBuilder()
     .addStringOption((option) => option.setName('password').setDescription('Password dell\'archivio').setRequired(true));
 async function execute(interaction) {
     const password = interaction.options.getString('password', true);
-    if (!(0, archive_1.hasArchiveAccess)(interaction.user.id, password)) {
+    if (!(0, archive_1.hasArchiveAccess)(password)) {
         await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }

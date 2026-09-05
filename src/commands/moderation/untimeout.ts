@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
+import { requireGuildPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('untimeout')
@@ -9,6 +9,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) => opt.setName('motivo').setDescription('Motivo della revoca').setRequired(true));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!await requireGuildPermission(interaction, PermissionFlagsBits.ModerateMembers)) return;
   const targetUser = interaction.options.getUser('utente', true);
   const reason = interaction.options.getString('motivo', true);
 
@@ -17,14 +18,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   try {
     const member = await interaction.guild.members.fetch(targetUser.id);
     await member.timeout(null, reason);
-
-    await saveSanction({
-      userId: targetUser.id,
-      moderatorId: interaction.user.id,
-      guildId: interaction.guild.id,
-      type: 'UNTIMEOUT',
-      reason,
-    });
 
     const embed = new EmbedBuilder()
       .setColor(0x57F287)

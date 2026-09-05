@@ -7,8 +7,7 @@ async function sendModNotification(interaction) {
     if (!interaction.guild)
         return false;
     const subcommand = interaction.options.getSubcommand(false);
-    if (['aggiungi', 'rimuovi', 'registro', 'pulisci'].includes(interaction.commandName)
-        || (interaction.commandName === 'warn' && subcommand === 'remove'))
+    if (interaction.commandName === 'warn' && subcommand === 'remove')
         return false;
     if (notifiedInteractions.has(interaction))
         return false;
@@ -50,15 +49,15 @@ async function sendModNotification(interaction) {
         }
     }
     else if (commandName === 'kick') {
-        title = '🚪 Sei stato espulso dal server C.S.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
+        title = '🚪 Sei stato espulso dal server C.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
         color = 0xED4245;
     }
     else if (commandName === 'ban') {
-        title = '🔨 Sei stato bannato dal server C.S.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
+        title = '🔨 Sei stato bannato dal server C.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
         color = 0x992D22;
     }
     else if (commandName === 'unban') {
-        title = '🔓 Sei stato sbannato dal server C.S.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
+        title = '🔓 Sei stato sbannato dal server C.S.D. Se ritieni sia stato un errore, contatta tenente_ferivan';
         color = 0x57F287;
     }
     else if (commandName === 'mute' || commandName === 'timeout') {

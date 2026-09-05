@@ -37,6 +37,7 @@ exports.deployCommands = deployCommands;
 const discord_js_1 = require("discord.js");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const ticketScope_1 = require("./utils/ticketScope");
 const style = {
     reset: '\x1b[0m',
     bold: '\x1b[1m',
@@ -76,7 +77,6 @@ async function deployCommands() {
     console.log(`${style.cyan}│ ${style.bold}🚀 CARICAMENTO E SINCRONIZZAZIONE DEI COMANDI               ${style.cyan}│${style.reset}`);
     console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
     try {
-        await rest.put(discord_js_1.Routes.applicationCommands(clientId), { body: [] });
         const commandsPayload = [];
         let slashCount = 0;
         const commandsPath = path.join(__dirname, 'commands');
@@ -113,9 +113,21 @@ async function deployCommands() {
                 console.log(`${style.cyan}│${style.reset}  ${style.red}✗ Slash${style.reset}  ┆ ${nameFormatted} ${style.red}[Errore]${style.reset}     ${style.cyan}│${style.reset}`);
             }
         }
-        const data = (await rest.put(discord_js_1.Routes.applicationCommands(clientId), { body: commandsPayload }));
+        const ticketGuildId = (0, ticketScope_1.getTicketGuildId)();
+        const globalCommands = commandsPayload.filter((cmd) => !ticketScope_1.ticketCommandNames.has(cmd.name));
+        const ticketCommands = commandsPayload.filter((cmd) => ticketScope_1.ticketCommandNames.has(cmd.name));
+        // Registra comandi globali
+        const globalData = (await rest.put(discord_js_1.Routes.applicationCommands(clientId), { body: globalCommands }));
+        // Registra comandi di ticket a livello di guild (se configurato)
+        if (ticketGuildId && ticketCommands.length > 0) {
+            const deployedTicketCommands = await rest.put(discord_js_1.Routes.applicationGuildCommands(clientId, ticketGuildId), { body: ticketCommands });
+            console.log(`Comandi ticket pubblicati nella guild configurata: ${deployedTicketCommands.length}.`);
+        }
+        else if (!ticketGuildId) {
+            console.warn('TICKET_GUILD_ID non configurato: i comandi ticket non verranno pubblicati.');
+        }
         console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
-        console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} ${style.green}${data.length}${style.reset} Comandi Sincronizzati con Successo     ${style.cyan}│${style.reset}`);
+        console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} ${style.green}${globalData.length}${style.reset} Comandi globali + ${style.green}${ticketCommands.length}${style.reset} Comandi ticket${style.reset}    ${style.cyan}│${style.reset}`);
         console.log(`${style.cyan}╰─────────────────────────────────────────────────────────────╯${style.reset}\n`);
     }
     catch (error) {

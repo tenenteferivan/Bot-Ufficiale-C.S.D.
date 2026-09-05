@@ -34,184 +34,100 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
-exports.getUserProfile = getUserProfile;
-exports.changeUserPoints = changeUserPoints;
-exports.addUserNote = addUserNote;
-exports.ensureLowPointsNote = ensureLowPointsNote;
-exports.deleteUserNote = deleteUserNote;
-exports.getSanctions = getSanctions;
-exports.deleteSanctions = deleteSanctions;
-exports.saveSanction = saveSanction;
+exports.saveLogConfig = saveLogConfig;
+exports.getLogConfig = getLogConfig;
 const sqlite3 = __importStar(require("sqlite3"));
-const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+const path = __importStar(require("path"));
+const projectPaths_1 = require("../utils/projectPaths");
+if (!fs.existsSync(projectPaths_1.dataDirectory)) {
+    fs.mkdirSync(projectPaths_1.dataDirectory, { recursive: true });
 }
-const dbPath = path.join(dataDir, 'registro.sqlite');
-exports.db = new sqlite3.Database(dbPath);
-// Inizializzazione della tabella delle sanzioni
+exports.db = new sqlite3.Database(path.join(projectPaths_1.dataDirectory, 'registro.sqlite'));
 exports.db.serialize(() => {
+    exports.db.run(`CREATE TABLE IF NOT EXISTS user_records (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    points REAL NOT NULL DEFAULT 20.0,
+    max_points REAL NOT NULL DEFAULT 20.0,
+    sanctions_history TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    reports TEXT DEFAULT '',
+    status TEXT DEFAULT '',
+    PRIMARY KEY (guild_id, user_id)
+  )`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS user_sanctions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    points_removed REAL DEFAULT 0.0,
+    duration_days INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    expires_at TEXT
+  )`);
+    exports.db.run('CREATE INDEX IF NOT EXISTS idx_sanctions_guild_user ON user_sanctions (guild_id, user_id)');
+    exports.db.run(`CREATE TABLE IF NOT EXISTS automod_configs (
+    guild_id TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 0
+  )`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS ticket_configs (
+    guild_id TEXT PRIMARY KEY,
+    panel_channel_id TEXT NOT NULL,
+    staff_role_id TEXT NOT NULL,
+    next_number INTEGER NOT NULL DEFAULT 1
+  )`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS tickets (
+    channel_id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    ticket_number INTEGER NOT NULL,
+    opener_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    claimed_by TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL
+  )`);
     exports.db.run(`
-    CREATE TABLE IF NOT EXISTS sanctions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      moderator_id TEXT NOT NULL,
-      guild_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      reason TEXT NOT NULL,
-      duration TEXT,
-      timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
-    )
-  `);
-    exports.db.run(`
-    CREATE TABLE IF NOT EXISTS automod_whitelist (
-      guildId TEXT NOT NULL,
-      targetId TEXT NOT NULL,
-      type TEXT NOT NULL,
-      userId TEXT,
-      PRIMARY KEY (guildId, targetId)
-    )
-  `);
-    exports.db.run(`
-    CREATE TABLE IF NOT EXISTS user_points (
-      user_id TEXT NOT NULL,
-      guild_id TEXT NOT NULL,
-      points REAL NOT NULL DEFAULT 15 CHECK (points >= 0 AND points <= 15),
-      PRIMARY KEY (user_id, guild_id)
-    )
-  `);
-    exports.db.run(`
-    CREATE TABLE IF NOT EXISTS user_notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      guild_id TEXT NOT NULL,
-      note TEXT NOT NULL,
-      author_id TEXT NOT NULL,
-      timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
-    )
-  `);
-    exports.db.run(`
-    CREATE TABLE IF NOT EXISTS ticket_configs (
-      guild_id TEXT PRIMARY KEY,
-      panel_channel_id TEXT NOT NULL,
-      staff_role_id TEXT NOT NULL,
-      next_number INTEGER NOT NULL DEFAULT 1
-    )
-  `);
-    exports.db.run(`
-    CREATE TABLE IF NOT EXISTS tickets (
-      channel_id TEXT PRIMARY KEY,
-      guild_id TEXT NOT NULL,
-      ticket_number INTEGER NOT NULL,
-      opener_id TEXT NOT NULL,
-      category TEXT NOT NULL,
-      claimed_by TEXT,
-      status TEXT NOT NULL DEFAULT 'open',
-      created_at TEXT NOT NULL
-    )
-  `);
+  CREATE TABLE IF NOT EXISTS user_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    note TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS log_configs (
+    guild_id TEXT PRIMARY KEY,
+    log_channel_id TEXT NOT NULL
+  )`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS partnership_configs (
+    guild_id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    role_id TEXT NOT NULL
+  )`);
+    exports.db.run(`CREATE TABLE IF NOT EXISTS partnership_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    guild_name TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    manager_id TEXT NOT NULL,
+    ping_id TEXT,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  )`);
+    exports.db.run('CREATE INDEX IF NOT EXISTS idx_partnership_guild_user ON partnership_submissions (guild_id, user_id)');
+    exports.db.run('CREATE INDEX IF NOT EXISTS idx_partnership_user ON partnership_submissions (user_id)');
+    exports.db.run('CREATE INDEX IF NOT EXISTS idx_partnership_guild ON partnership_submissions (guild_id)');
 });
-function ensureUserPoints(userId, guildId) {
+function saveLogConfig(guildId, logChannelId) {
     return new Promise((resolve, reject) => {
-        exports.db.run('INSERT OR IGNORE INTO user_points (user_id, guild_id, points) VALUES (?, ?, 15)', [userId, guildId], (err) => (err ? reject(err) : resolve()));
+        exports.db.run('INSERT OR REPLACE INTO log_configs (guild_id, log_channel_id) VALUES (?, ?)', [guildId, logChannelId], (err) => (err ? reject(err) : resolve()));
     });
 }
-async function getUserProfile(userId, guildId) {
-    await ensureUserPoints(userId, guildId);
-    const points = await new Promise((resolve, reject) => {
-        exports.db.get('SELECT points FROM user_points WHERE user_id = ? AND guild_id = ?', [userId, guildId], (err, row) => (err ? reject(err) : resolve(Number(row.points))));
-    });
-    const notes = await new Promise((resolve, reject) => {
-        exports.db.all(`SELECT id, note, author_id AS authorId, timestamp
-       FROM user_notes WHERE user_id = ? AND guild_id = ? ORDER BY timestamp DESC, id DESC`, [userId, guildId], (err, rows) => (err ? reject(err) : resolve(rows)));
-    });
-    return { points, notes };
-}
-function changeUserPoints(userId, guildId, delta) {
+function getLogConfig(guildId) {
     return new Promise((resolve, reject) => {
-        exports.db.serialize(() => {
-            exports.db.run('INSERT OR IGNORE INTO user_points (user_id, guild_id, points) VALUES (?, ?, 15)', [userId, guildId], (insertError) => {
-                if (insertError) {
-                    reject(insertError);
-                    return;
-                }
-                exports.db.run('UPDATE user_points SET points = points + ? WHERE user_id = ? AND guild_id = ? AND points + ? BETWEEN 0 AND 15', [delta, userId, guildId, delta], function (updateError) {
-                    if (updateError)
-                        reject(updateError);
-                    else if (this.changes === 0)
-                        reject(new Error('Il punteggio deve rimanere tra 0 e 15.'));
-                    else {
-                        exports.db.get('SELECT points FROM user_points WHERE user_id = ? AND guild_id = ?', [userId, guildId], (readError, row) => readError ? reject(readError) : resolve(Number(row.points)));
-                    }
-                });
-            });
-        });
-    });
-}
-function addUserNote(userId, guildId, authorId, note) {
-    return new Promise((resolve, reject) => {
-        exports.db.run('INSERT INTO user_notes (user_id, guild_id, author_id, note) VALUES (?, ?, ?, ?)', [userId, guildId, authorId, note], function (err) {
-            if (err)
-                reject(err);
-            else
-                resolve(this.lastID);
-        });
-    });
-}
-async function ensureLowPointsNote(userId, guildId, authorId) {
-    const profile = await getUserProfile(userId, guildId);
-    const requiredNote = 'Questo utente non può essere staff.';
-    if (profile.points < 5 && !profile.notes.some((note) => note.note === requiredNote)) {
-        await addUserNote(userId, guildId, authorId, requiredNote);
-    }
-}
-function deleteUserNote(noteId, userId, guildId) {
-    return new Promise((resolve, reject) => {
-        exports.db.run('DELETE FROM user_notes WHERE id = ? AND user_id = ? AND guild_id = ?', [noteId, userId, guildId], function (err) {
-            if (err)
-                reject(err);
-            else
-                resolve(this.changes > 0);
-        });
-    });
-}
-function getSanctions(userId, guildId) {
-    return new Promise((resolve, reject) => {
-        exports.db.all(`SELECT id, user_id AS userId, moderator_id AS moderatorId, guild_id AS guildId,
-              type, reason, duration, timestamp
-       FROM sanctions
-       WHERE user_id = ? AND guild_id = ?
-       ORDER BY timestamp ASC, id ASC`, [userId, guildId], (err, rows) => {
-            if (err)
-                reject(err);
-            else
-                resolve(rows);
-        });
-    });
-}
-function deleteSanctions(userId, guildId) {
-    return new Promise((resolve, reject) => {
-        exports.db.run('DELETE FROM sanctions WHERE user_id = ? AND guild_id = ?', [userId, guildId], function (err) {
-            if (err)
-                reject(err);
-            else
-                resolve(this.changes);
-        });
-    });
-}
-function saveSanction(record) {
-    return new Promise((resolve, reject) => {
-        const query = `
-      INSERT INTO sanctions (user_id, moderator_id, guild_id, type, reason, duration)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
-        exports.db.run(query, [record.userId, record.moderatorId, record.guildId, record.type, record.reason, record.duration || null], (err) => {
-            if (err)
-                reject(err);
-            else
-                resolve();
-        });
+        exports.db.get('SELECT log_channel_id FROM log_configs WHERE guild_id = ?', [guildId], (err, row) => (err ? reject(err) : resolve(row?.log_channel_id ?? null)));
     });
 }

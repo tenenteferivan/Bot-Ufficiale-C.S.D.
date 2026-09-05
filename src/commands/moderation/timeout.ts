@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
-import { saveSanction } from '../../handlers/databasehandler';
 import { parseDuration } from '../../utils/timeParser';
+import { requireGuildPermission } from '../../utils/permissions';
 
 export const data = new SlashCommandBuilder()
   .setName('timeout')
@@ -11,6 +11,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((opt) => opt.setName('durata').setDescription('Durata (es. 10m, 1h, 1d)').setRequired(true));
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!await requireGuildPermission(interaction, PermissionFlagsBits.ModerateMembers)) return;
   const targetUser = interaction.options.getUser('utente', true);
   const reason = interaction.options.getString('motivo', true);
   const durationStr = interaction.options.getString('durata', true);
@@ -26,15 +27,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   try {
     const member = await interaction.guild.members.fetch(targetUser.id);
     await member.timeout(durationMs, reason);
-
-    await saveSanction({
-      userId: targetUser.id,
-      moderatorId: interaction.user.id,
-      guildId: interaction.guild.id,
-      type: 'TIMEOUT',
-      reason,
-      duration: durationStr,
-    });
 
     const embed = new EmbedBuilder()
       .setColor(0xE91E63)

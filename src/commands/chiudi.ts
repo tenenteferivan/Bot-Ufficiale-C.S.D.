@@ -1,10 +1,14 @@
 import { ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { closeModal, getTicket, getTicketConfig, isStaff } from '../utils/ticketManager';
+import { closeModal, getTicket, getTicketConfig, isStaff, isTicketGuild } from '../utils/ticketManager';
 
 export const data = new SlashCommandBuilder().setName('chiudi').setDescription('Avvia la chiusura del ticket corrente.');
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.guild || !interaction.channel || !interaction.member) return;
+  if (!isTicketGuild(interaction.guild.id)) {
+    await interaction.reply({ content: 'Il sistema ticket e disponibile solo nel server configurato.', flags: MessageFlags.Ephemeral });
+    return;
+  }
   const ticket = await getTicket(interaction.channel.id);
   const config = await getTicketConfig(interaction.guild.id);
   if (!ticket || !config) {

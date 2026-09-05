@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.name = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
-const databasehandler_1 = require("../../handlers/databasehandler");
 exports.name = 'kick';
 async function execute(message, args) {
     if (!message.member?.permissions.has(discord_js_1.PermissionFlagsBits.KickMembers)) {
@@ -18,13 +17,6 @@ async function execute(message, args) {
     const reason = args.slice(1).join(' ');
     try {
         await target.kick(reason);
-        await (0, databasehandler_1.saveSanction)({
-            userId: target.id,
-            moderatorId: message.author.id,
-            guildId: message.guild.id,
-            type: 'KICK',
-            reason,
-        });
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0xFEE75C)
             .setTitle('🚪 • SANZIONE APPLICATA: KICK')

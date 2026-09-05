@@ -9,7 +9,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const password = interaction.options.getString('password', true);
 
-  if (!hasArchiveAccess(interaction.user.id, password)) {
+  if (!hasArchiveAccess(password)) {
     await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: MessageFlags.Ephemeral });
     return;
   }

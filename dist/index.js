@@ -42,8 +42,8 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const deploycommands_1 = require("./deploycommands");
 const modLogger_1 = require("./utils/modLogger");
-const automod_1 = require("./utils/automod");
 const ticketInteractions_1 = require("./utils/ticketInteractions");
+const partnershipInteractions_1 = require("./utils/partnershipInteractions");
 dotenv_1.default.config({ path: path.resolve(__dirname, '../.env') });
 const token = process.env.DISCORD_TOKEN?.trim();
 if (!token) {
@@ -124,6 +124,8 @@ client.once('clientReady', async () => {
 });
 // Gestore unico delle interazioni (Slash + autocompletamento)
 client.on('interactionCreate', async (interaction) => {
+    if (await (0, partnershipInteractions_1.handlePartnershipInteraction)(interaction))
+        return;
     if (await (0, ticketInteractions_1.handleTicketInteraction)(interaction))
         return;
     // Gestione dell'autocompletamento
@@ -151,7 +153,7 @@ client.on('interactionCreate', async (interaction) => {
         // 2. Intercettore globale di moderazione: valuta e invia il messaggio privato quando necessario.
         await (0, modLogger_1.sendModNotification)(interaction);
         if (interaction.guild) {
-            await (0, serverLogger_1.logCommand)(client, interaction.commandName, interaction.user, interaction.guild.name);
+            await (0, serverLogger_1.logCommand)(client, interaction.commandName, interaction.user, interaction.guild.id);
         }
     }
     catch (error) {
@@ -174,11 +176,6 @@ client.on('messageCreate', async (message) => {
     // Ignora i bot
     if (message.author.bot)
         return;
-    // Esegue il filtro AutoMod
-    const isBadWord = await (0, automod_1.checkAutoMod)(message);
-    // Se è stata rilevata una parola vietata, il messaggio è già stato eliminato e sanzionato.
-    if (isBadWord)
-        return;
     // Logica per i comandi con prefisso
     const prefix = PREFIX; // Usa il prefisso configurato.
     if (!message.content.startsWith(prefix))
@@ -193,7 +190,7 @@ client.on('messageCreate', async (message) => {
     try {
         await command.execute(message, args);
         if (message.guild) {
-            await (0, serverLogger_1.logCommand)(client, command.name, message.author, message.guild.name);
+            await (0, serverLogger_1.logCommand)(client, command.name, message.author, message.guild.id);
         }
     }
     catch (error) {

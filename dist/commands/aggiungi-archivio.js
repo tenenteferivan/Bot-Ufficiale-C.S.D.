@@ -54,7 +54,7 @@ async function execute(interaction) {
     const requestedName = interaction.options.getString('nome', true);
     const attachment = interaction.options.getAttachment('file_allegato', true);
     const fileName = (0, archive_1.normalizeArchiveName)(requestedName);
-    if (!(0, archive_1.hasArchiveAccess)(interaction.user.id, password)) {
+    if (!(0, archive_1.hasArchiveAccess)(password)) {
         await (0, archive_1.notifyArchiveOwner)(interaction.client, 'Caricamento', interaction.user.id, false, 'Accesso negato.');
         await interaction.reply({ content: '❌ Credenziali non valide o accesso non autorizzato.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
@@ -64,8 +64,12 @@ async function execute(interaction) {
         await interaction.reply({ content: '❌ Il nome del file non è valido.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
+    if (attachment.size > archive_1.MAX_ARCHIVE_ATTACHMENT_BYTES) {
+        await interaction.reply({ content: '❌ Il file supera il limite di 25 MB dell\'archivio.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
     await interaction.deferReply({ flags: discord_js_1.MessageFlags.Ephemeral });
-    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'cssd-archive-upload-'));
+    const tempDir = await (0, promises_1.mkdtemp)(path.join(os.tmpdir(), 'csd-archive-upload-'));
     const tempFile = path.join(tempDir, 'source.bin');
     try {
         const response = await fetch(attachment.url);

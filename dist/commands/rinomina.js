@@ -11,6 +11,10 @@ exports.data = new discord_js_1.SlashCommandBuilder()
 async function execute(interaction) {
     if (!interaction.guild || !interaction.channel || !interaction.member || !('setName' in interaction.channel))
         return;
+    if (!(0, ticketManager_1.isTicketGuild)(interaction.guild.id)) {
+        await interaction.reply({ content: 'Il sistema ticket e disponibile solo nel server configurato.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
     const ticket = await (0, ticketManager_1.getTicket)(interaction.channel.id);
     const config = await (0, ticketManager_1.getTicketConfig)(interaction.guild.id);
     if (!ticket || !config) {
