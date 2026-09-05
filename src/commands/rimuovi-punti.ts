@@ -108,7 +108,7 @@ export async function execute(
 
     // Rimuove i punti dal database
     const newPoints = await removePoints(
-      interaction.guild.id,
+
       userId,
       amount,
       motivo

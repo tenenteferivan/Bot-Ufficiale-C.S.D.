@@ -21,7 +21,7 @@ async function execute(message, args) {
         member = await message.guild.members.fetch(targetUser.id).catch(() => null);
     }
     try {
-        const embed = await (0, userRecord_1.createUserInfoEmbed)(targetUser, member, message.guild?.id);
+        const embed = await (0, userRecord_1.createUserInfoEmbed)(targetUser, member);
         await message.reply({ embeds: [embed] });
     }
     catch (error) {

@@ -11,7 +11,9 @@ import { db } from '../handlers/databasehandler';
 // Creazione comando
 export const data = new SlashCommandBuilder()
   .setName('resetta-registro')
-  .setDescription('Resetta completamente il registro di un utente (Solo OPERATOR).')
+  .setDescription(
+    'Resetta completamente il registro di un utente (Solo OPERATOR).'
+  )
   .addStringOption((option) =>
     option
       .setName('utente')
@@ -66,7 +68,6 @@ export async function execute(
   }
 
   try {
-
     // Recupera l'utente Discord
     const targetUser = await interaction.client.users.fetch(userId);
 
@@ -74,14 +75,30 @@ export async function execute(
     await interaction.guild.members.fetch(targetUser.id);
 
     /*
-     * 1. Elimina tutte le sanzioni dell'utente
-     *    dalla tabella user_sanctions.
+     * ============================================================
+     * RESET GLOBALE DEL REGISTRO
+     * ============================================================
+     *
+     * Il registro è globale.
+     *
+     * Quindi NON utilizziamo guild_id.
+     *
+     * Il reset elimina:
+     * - tutte le sanzioni globali
+     * - tutte le note globali
+     * - tutti i dati del registro
+     *
+     * per questo user_id.
      */
+
+    // 1. Elimina tutte le sanzioni dell'utente
     await new Promise<void>((resolve, reject) => {
       db.run(
-        `DELETE FROM user_sanctions
-         WHERE guild_id = ? AND user_id = ?`,
-        [interaction.guild!.id, targetUser.id],
+        `
+        DELETE FROM user_sanctions
+        WHERE user_id = ?
+        `,
+        [targetUser.id],
         (error) => {
           if (error) {
             reject(error);
@@ -93,22 +110,21 @@ export async function execute(
       );
     });
 
-    /*
-     * 2. Resetta completamente il registro principale
-     *    dell'utente nella tabella user_records.
-     */
+    // 2. Resetta completamente il registro principale dell'utente
     await new Promise<void>((resolve, reject) => {
       db.run(
-        `UPDATE user_records
-         SET
-           points = 20.0,
-           max_points = 20.0,
-           sanctions_history = '',
-           notes = '',
-           reports = '',
-           status = ''
-         WHERE guild_id = ? AND user_id = ?`,
-        [interaction.guild!.id, targetUser.id],
+        `
+        UPDATE user_records
+        SET
+          points = 20.0,
+          max_points = 20.0,
+          sanctions_history = '',
+          notes = '',
+          reports = '',
+          status = ''
+        WHERE user_id = ?
+        `,
+        [targetUser.id],
         (error) => {
           if (error) {
             reject(error);
@@ -120,22 +136,24 @@ export async function execute(
       );
     });
 
+    // 3. Elimina tutte le note dell'utente
     await new Promise<void>((resolve, reject) => {
-  db.run(
-    `DELETE FROM user_notes
-     WHERE guild_id = ? AND user_id = ?`,
-    [interaction.guild!.id, targetUser.id],
-    (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+      db.run(
+        `
+        DELETE FROM user_notes
+        WHERE user_id = ?
+        `,
+        [targetUser.id],
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-      resolve();
-    }
-  );
-});
-
+          resolve();
+        }
+      );
+    });
 
     // Crea il messaggio di conferma
     const embed = new EmbedBuilder()
@@ -172,7 +190,6 @@ export async function execute(
     });
 
   } catch (error) {
-
     console.error(
       'Errore durante il reset del registro utente:',
       error

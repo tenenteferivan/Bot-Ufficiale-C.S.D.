@@ -110,7 +110,7 @@ export async function execute(
 
     // Registra l'avvertimento formale nel database
     const expiresAt = await addFormalWarning(
-      interaction.guild.id,
+
       userId,
       motivo,
       durationDays

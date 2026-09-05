@@ -18,7 +18,7 @@ async function execute(interaction) {
         member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
     }
     try {
-        const embed = await (0, userRecord_1.createUserInfoEmbed)(targetUser, member, interaction.guildId ?? undefined);
+        const embed = await (0, userRecord_1.createUserInfoEmbed)(targetUser, member);
         await interaction.reply({ embeds: [embed] });
     }
     catch (error) {

@@ -74,7 +74,6 @@ export async function execute(
   try {
     const targetUser = await interaction.client.users.fetch(userId);
 await addNote(
-  interaction.guild.id,
   userId,
   testo
 );

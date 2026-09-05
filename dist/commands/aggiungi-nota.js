@@ -53,7 +53,7 @@ async function execute(interaction) {
         .trim();
     try {
         const targetUser = await interaction.client.users.fetch(userId);
-        await (0, userRecord_1.addNote)(interaction.guild.id, userId, testo);
+        await (0, userRecord_1.addNote)(userId, testo);
         await interaction.reply({
             content: `✅ Nota aggiunta con successo a ${targetUser}.`,
             flags: discord_js_1.MessageFlags.Ephemeral,

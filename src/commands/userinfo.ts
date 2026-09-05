@@ -20,7 +20,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 
   try {
-    const embed = await createUserInfoEmbed(targetUser, member, interaction.guildId ?? undefined);
+    const embed = await createUserInfoEmbed(targetUser, member);
     await interaction.reply({ embeds: [embed] });
   } catch (error) {
     console.error('Errore durante l\'esecuzione di /userinfo:', error);

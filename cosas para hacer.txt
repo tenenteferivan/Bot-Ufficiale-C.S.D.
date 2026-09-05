@@ -1,1 +1,1 @@
-cosas para hacer botcsd, modificar el codigo para que los comandos de puntos ejecutables por el operador puedan ser ejecutados a un miembro que no esta en el server. 
+arreglar error en sistema de segnalacion, no funciona al enviar el modulo.

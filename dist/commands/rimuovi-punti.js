@@ -77,7 +77,7 @@ async function execute(interaction) {
     }
     try {
         // Rimuove i punti dal database
-        const newPoints = await (0, userRecord_1.removePoints)(interaction.guild.id, userId, amount, motivo);
+        const newPoints = await (0, userRecord_1.removePoints)(userId, amount, motivo);
         // Crea il messaggio di conferma
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0xED4245)

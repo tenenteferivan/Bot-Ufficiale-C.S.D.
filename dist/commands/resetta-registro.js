@@ -11,7 +11,7 @@ exports.data = new discord_js_1.SlashCommandBuilder()
     .setDescription('Resetta completamente il registro di un utente (Solo OPERATOR).')
     .addStringOption((option) => option
     .setName('utente')
-    .setDescription('Mention, username o ID dell\'utente')
+    .setDescription('Mention o ID dell\'utente')
     .setRequired(true));
 async function execute(interaction) {
     // Controlla che chi esegue il comando abbia il ruolo OPERATOR
@@ -30,18 +30,54 @@ async function execute(interaction) {
         });
         return;
     }
-    // Recupera l'utente indicato nel comando
-    const targetUser = interaction.options.getUser('utente', true);
+    // Recupera la stringa inserita dall'operatore
+    const input = interaction.options
+        .getString('utente', true)
+        .trim();
+    let userId;
+    // Controlla se è una mention Discord
+    const mentionMatch = input.match(/^<@!?(\d+)>$/);
+    if (mentionMatch) {
+        userId = mentionMatch[1];
+    }
+    else if (/^\d+$/.test(input)) {
+        // Controlla se è un ID Discord
+        userId = input;
+    }
+    else {
+        await interaction.reply({
+            content: '❌ Inserisci una mention o un ID utente valido.',
+            flags: discord_js_1.MessageFlags.Ephemeral,
+        });
+        return;
+    }
     try {
+        // Recupera l'utente Discord
+        const targetUser = await interaction.client.users.fetch(userId);
         // Controlla che l'utente faccia effettivamente parte del server
         await interaction.guild.members.fetch(targetUser.id);
         /*
-         * 1. Elimina tutte le sanzioni dell'utente
-         *    dalla tabella user_sanctions.
+         * ============================================================
+         * RESET GLOBALE DEL REGISTRO
+         * ============================================================
+         *
+         * Il registro è globale.
+         *
+         * Quindi NON utilizziamo guild_id.
+         *
+         * Il reset elimina:
+         * - tutte le sanzioni globali
+         * - tutte le note globali
+         * - tutti i dati del registro
+         *
+         * per questo user_id.
          */
+        // 1. Elimina tutte le sanzioni dell'utente
         await new Promise((resolve, reject) => {
-            databasehandler_1.db.run(`DELETE FROM user_sanctions
-         WHERE guild_id = ? AND user_id = ?`, [interaction.guild.id, targetUser.id], (error) => {
+            databasehandler_1.db.run(`
+        DELETE FROM user_sanctions
+        WHERE user_id = ?
+        `, [targetUser.id], (error) => {
                 if (error) {
                     reject(error);
                     return;
@@ -49,20 +85,32 @@ async function execute(interaction) {
                 resolve();
             });
         });
-        /*
-         * 2. Resetta completamente il registro principale
-         *    dell'utente nella tabella user_records.
-         */
+        // 2. Resetta completamente il registro principale dell'utente
         await new Promise((resolve, reject) => {
-            databasehandler_1.db.run(`UPDATE user_records
-         SET
-           points = 20.0,
-           max_points = 20.0,
-           sanctions_history = '',
-           notes = '',
-           reports = '',
-           status = ''
-         WHERE guild_id = ? AND user_id = ?`, [interaction.guild.id, targetUser.id], (error) => {
+            databasehandler_1.db.run(`
+        UPDATE user_records
+        SET
+          points = 20.0,
+          max_points = 20.0,
+          sanctions_history = '',
+          notes = '',
+          reports = '',
+          status = ''
+        WHERE user_id = ?
+        `, [targetUser.id], (error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
+        // 3. Elimina tutte le note dell'utente
+        await new Promise((resolve, reject) => {
+            databasehandler_1.db.run(`
+        DELETE FROM user_notes
+        WHERE user_id = ?
+        `, [targetUser.id], (error) => {
                 if (error) {
                     reject(error);
                     return;

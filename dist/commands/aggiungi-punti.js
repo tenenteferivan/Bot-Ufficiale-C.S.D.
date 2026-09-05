@@ -77,7 +77,7 @@ async function execute(interaction) {
         // Recupera l'utente Discord tramite il suo ID
         const targetUser = await interaction.client.users.fetch(userId);
         // Aggiunge i punti al database
-        const newPoints = await (0, userRecord_1.addPoints)(interaction.guild.id, userId, amount);
+        const newPoints = await (0, userRecord_1.addPoints)(userId, amount);
         // Crea il messaggio di conferma
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0x57F287)

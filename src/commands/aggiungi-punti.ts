@@ -108,7 +108,6 @@ export async function execute(
 
     // Aggiunge i punti al database
     const newPoints = await addPoints(
-      interaction.guild.id,
       userId,
       amount
     );

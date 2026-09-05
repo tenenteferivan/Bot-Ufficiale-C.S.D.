@@ -24,7 +24,7 @@ export async function execute(message: Message, args: string[]): Promise<void> {
   }
 
   try {
-    const embed = await createUserInfoEmbed(targetUser, member, message.guild?.id);
+    const embed = await createUserInfoEmbed(targetUser, member);
     await message.reply({ embeds: [embed] });
   } catch (error) {
     console.error('Errore durante l\'esecuzione del comando con prefisso userinfo:', error);

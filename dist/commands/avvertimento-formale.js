@@ -77,7 +77,7 @@ async function execute(interaction) {
     }
     try {
         // Registra l'avvertimento formale nel database
-        const expiresAt = await (0, userRecord_1.addFormalWarning)(interaction.guild.id, userId, motivo, durationDays);
+        const expiresAt = await (0, userRecord_1.addFormalWarning)(userId, motivo, durationDays);
         // Converte la scadenza nel formato timestamp di Discord
         const expiresTimestamp = Math.floor(expiresAt.getTime() / 1000);
         // Crea il messaggio di conferma
