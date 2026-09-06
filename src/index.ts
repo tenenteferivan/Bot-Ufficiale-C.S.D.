@@ -10,6 +10,10 @@ import {
   InteractionReplyOptions,
 } from 'discord.js';
 
+import {
+  handleAntiLink,
+} from './utils/antilinkHandler';
+
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -948,6 +952,18 @@ client.on(
   'messageCreate',
   async (message) => {
 
+
+        try {
+      await handleAntiLink(
+        message
+      );
+    } catch (error) {
+      console.error(
+        '[ANTILINK] Errore durante il controllo del messaggio:',
+        error
+      );
+    } 
+    
     if (
       message.author.bot
     ) {

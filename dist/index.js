@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
+const antilinkHandler_1 = require("./utils/antilinkHandler");
 const dotenv_1 = __importDefault(require("dotenv"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -458,6 +459,12 @@ client.on('interactionCreate', async (interaction) => {
  * ============================================================
  */
 client.on('messageCreate', async (message) => {
+    try {
+        await (0, antilinkHandler_1.handleAntiLink)(message);
+    }
+    catch (error) {
+        console.error('[ANTILINK] Errore durante il controllo del messaggio:', error);
+    }
     if (message.author.bot) {
         return;
     }
