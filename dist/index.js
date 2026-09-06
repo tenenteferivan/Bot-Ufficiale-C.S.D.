@@ -47,6 +47,7 @@ const partnershipInteractions_1 = require("./utils/partnershipInteractions");
 const interactionCreate_1 = __importDefault(require("./events/interactionCreate"));
 const databasehandler_1 = require("./handlers/databasehandler");
 const serverLogger_1 = require("./utils/serverLogger");
+const restrictionHandler_1 = require("./handlers/restrictionHandler");
 /*
  * ============================================================
  * BAN GLOBALE
@@ -498,7 +499,26 @@ client.on('messageCreate', async (message) => {
  * ============================================================
  */
 client.on('messageDelete', (message) => (0, serverLogger_1.logMessageDelete)(client, message));
-client.on('guildMemberAdd', (member) => (0, serverLogger_1.logMemberJoin)(client, member));
+client.on('guildMemberAdd', async (member) => {
+    // --------------------------------------------------------
+    // SISTEMA DE RESTRICCIONES
+    // --------------------------------------------------------
+    try {
+        await (0, restrictionHandler_1.handleRestrictionJoin)(member);
+    }
+    catch (error) {
+        console.error('[RESTRICTION] Errore durante il controllo della restrizione:', error);
+    }
+    // --------------------------------------------------------
+    // LOG ENTRADA AL SERVIDOR
+    // --------------------------------------------------------
+    try {
+        await (0, serverLogger_1.logMemberJoin)(client, member);
+    }
+    catch (error) {
+        console.error('[SERVER LOG] Errore durante il log dell\'ingresso:', error);
+    }
+});
 client.on('guildMemberRemove', (member) => (0, serverLogger_1.logMemberLeave)(client, member));
 client.on('guildBanAdd', (ban) => (0, serverLogger_1.logBan)(client, ban.guild, ban.user, true));
 client.on('guildBanRemove', (ban) => (0, serverLogger_1.logBan)(client, ban.guild, ban.user, false));

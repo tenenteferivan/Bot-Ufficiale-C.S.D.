@@ -46,6 +46,8 @@ import {
   logRoleUpdate,
 } from './utils/serverLogger';
 
+import { handleRestrictionJoin } from './handlers/restrictionHandler';
+
 /*
  * ============================================================
  * BAN GLOBALE
@@ -1053,13 +1055,48 @@ client.on(
 
 client.on(
   'guildMemberAdd',
-  (member) =>
-    logMemberJoin(
-      client,
-      member
-    )
-);
+  async (member) => {
 
+    // --------------------------------------------------------
+    // SISTEMA DE RESTRICCIONES
+    // --------------------------------------------------------
+
+    try {
+
+      await handleRestrictionJoin(
+        member
+      );
+
+    } catch (error) {
+
+      console.error(
+        '[RESTRICTION] Errore durante il controllo della restrizione:',
+        error
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // LOG ENTRADA AL SERVIDOR
+    // --------------------------------------------------------
+
+    try {
+
+      await logMemberJoin(
+        client,
+        member
+      );
+
+    } catch (error) {
+
+      console.error(
+        '[SERVER LOG] Errore durante il log dell\'ingresso:',
+        error
+      );
+    }
+
+  }
+);
 
 client.on(
   'guildMemberRemove',

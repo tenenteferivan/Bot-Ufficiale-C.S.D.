@@ -1,9 +1,10 @@
 (ECHO)arreglar el problema de ban globale, no carga el comando ban-globale DE PREFIJO.
-testear el sistema de bans gloables
-hacer commit en github
-añadir sistema de restriccion de entrada. 
-recontrolar tickets y comandos exlusivos de GUILD_ID. 
+(ECHO)testear el sistema de bans gloables
+(echo)arreglar el problema de ban globale, no carga el comando ban-globale DE PREFIJO.
+(ECHO)añadir sistema de restriccion de entrada. 
+añadir sistema de antilink
 añadir sistema de estatus del usuario(ej. operador CSD)
+recontrolar tickets y comandos exlusivos de GUILD_ID. 
 alertas de seguridad
 anuncios generales
 recontrol del bot y optimizar el codigo
