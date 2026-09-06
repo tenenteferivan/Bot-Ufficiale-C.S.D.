@@ -1,1 +1,11 @@
-arreglar error en sistema de segnalacion, no funciona al enviar el modulo.
+(ECHO)arreglar el problema de ban globale, no carga el comando ban-globale DE PREFIJO.
+testear el sistema de bans gloables
+hacer commit en github
+añadir sistema de restriccion de entrada. 
+recontrolar tickets y comandos exlusivos de GUILD_ID. 
+añadir sistema de estatus del usuario(ej. operador CSD)
+alertas de seguridad
+anuncios generales
+recontrol del bot y optimizar el codigo
+deploy commands que soporte los subcomandos
+optimizazion de la base de datos dividiendo archivos(en valutacion)

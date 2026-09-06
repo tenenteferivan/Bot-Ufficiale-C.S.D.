@@ -16,9 +16,11 @@ import * as path from 'path';
 
 import { deployCommands } from './deploycommands';
 import { sendModNotification } from './utils/modLogger';
+
 import {
   handleTicketInteraction,
 } from './utils/ticketInteractions';
+
 import {
   handlePartnershipInteraction,
 } from './utils/partnershipInteractions';
@@ -44,11 +46,51 @@ import {
   logRoleUpdate,
 } from './utils/serverLogger';
 
+/*
+ * ============================================================
+ * BAN GLOBALE
+ * ============================================================
+ *
+ * Importiamo esclusivamente il sistema che gestisce
+ * le scadenze dei ban globali.
+ *
+ * Il comando /ban-globale rimane nel proprio file.
+ *
+ * Questo sistema:
+ *
+ * - carica i ban temporanei salvati
+ * - ricrea i timer dopo un restart
+ * - rileva ban già scaduti
+ * - invia la notifica nel canale configurato
+ * - evita di perdere le scadenze al riavvio del bot
+ *
+ * ============================================================
+ */
+
+import {
+  initializeGlobalBanExpirationSystem,
+} from './commands/ban-globale';
+
+
+/*
+ * ============================================================
+ * DOTENV
+ * ============================================================
+ */
+
 dotenv.config({
   path: path.resolve(__dirname, '../.env'),
 });
 
-const token = process.env.DISCORD_TOKEN?.trim();
+
+/*
+ * ============================================================
+ * TOKEN
+ * ============================================================
+ */
+
+const token =
+  process.env.DISCORD_TOKEN?.trim();
 
 if (!token) {
   console.error(
@@ -59,9 +101,11 @@ if (!token) {
 }
 
 
-// ============================================================
-// INTERFACCE
-// ============================================================
+/*
+ * ============================================================
+ * INTERFACCE
+ * ============================================================
+ */
 
 export interface SlashCommand {
   data: {
@@ -79,6 +123,7 @@ export interface SlashCommand {
 
 export interface PrefixCommand {
   name: string;
+
   aliases?: string[];
 
   execute: (
@@ -88,9 +133,11 @@ export interface PrefixCommand {
 }
 
 
-// ============================================================
-// CLIENT
-// ============================================================
+/*
+ * ============================================================
+ * CLIENT
+ * ============================================================
+ */
 
 class ExtendedClient extends Client {
   public commands:
@@ -102,23 +149,34 @@ class ExtendedClient extends Client {
     new Collection();
 }
 
-const client = new ExtendedClient({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.MessageContent,
-  ],
-});
+
+const client =
+  new ExtendedClient({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildModeration,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
+
+
+/*
+ * ============================================================
+ * PREFIX
+ * ============================================================
+ */
 
 const PREFIX =
   process.env.PREFIX || '!';
 
 
-// ============================================================
-// RICERCA FILE
-// ============================================================
+/*
+ * ============================================================
+ * RICERCA FILE
+ * ============================================================
+ */
 
 function getAllFiles(
   dirPath: string,
@@ -135,7 +193,10 @@ function getAllFiles(
   files.forEach((file) => {
 
     const fullPath =
-      path.join(dirPath, file);
+      path.join(
+        dirPath,
+        file
+      );
 
     if (
       fs.statSync(fullPath).isDirectory()
@@ -148,12 +209,16 @@ function getAllFiles(
         );
 
     } else if (
-      (file.endsWith('.ts') ||
-        file.endsWith('.js')) &&
+      (
+        file.endsWith('.ts') ||
+        file.endsWith('.js')
+      ) &&
       !file.endsWith('.d.ts')
     ) {
 
-      arrayOfFiles.push(fullPath);
+      arrayOfFiles.push(
+        fullPath
+      );
     }
   });
 
@@ -161,9 +226,11 @@ function getAllFiles(
 }
 
 
-// ============================================================
-// CARICAMENTO COMANDI SLASH
-// ============================================================
+/*
+ * ============================================================
+ * CARICAMENTO COMANDI SLASH
+ * ============================================================
+ */
 
 function loadSlashCommands(): void {
 
@@ -174,9 +241,14 @@ function loadSlashCommands(): void {
     );
 
   const commandFiles =
-    getAllFiles(commandsPath);
+    getAllFiles(
+      commandsPath
+    );
 
-  for (const filePath of commandFiles) {
+  for (
+    const filePath
+    of commandFiles
+  ) {
 
     const required =
       require(filePath);
@@ -206,9 +278,11 @@ function loadSlashCommands(): void {
 }
 
 
-// ============================================================
-// CARICAMENTO COMANDI PREFIX
-// ============================================================
+/*
+ * ============================================================
+ * CARICAMENTO COMANDI PREFIX
+ * ============================================================
+ */
 
 function loadPrefixCommands(): void {
 
@@ -219,9 +293,14 @@ function loadPrefixCommands(): void {
     );
 
   const prefixFiles =
-    getAllFiles(prefixPath);
+    getAllFiles(
+      prefixPath
+    );
 
-  for (const filePath of prefixFiles) {
+  for (
+    const filePath
+    of prefixFiles
+  ) {
 
     const required =
       require(filePath);
@@ -267,9 +346,11 @@ function loadPrefixCommands(): void {
 }
 
 
-// ============================================================
-// AVVIO
-// ============================================================
+/*
+ * ============================================================
+ * AVVIO
+ * ============================================================
+ */
 
 client.once(
   'clientReady',
@@ -283,10 +364,58 @@ client.once(
       `Autenticazione riuscita. Bot attivo come: ${client.user.tag}`
     );
 
+
+    /*
+     * ========================================================
+     * DEPLOY COMANDI
+     * ========================================================
+     */
+
     await deployCommands();
+
+
+    /*
+     * ========================================================
+     * CARICAMENTO COMANDI
+     * ========================================================
+     */
 
     loadSlashCommands();
     loadPrefixCommands();
+
+
+    /*
+     * ========================================================
+     * INIZIALIZZAZIONE BAN GLOBALI
+     * ========================================================
+     *
+     * IMPORTANTE:
+     *
+     * Questo viene eseguito dopo che il bot è autenticato.
+     *
+     * Il sistema legge:
+     *
+     * data/global-bans.json
+     *
+     * e ricrea tutti i timer delle scadenze.
+     *
+     * Se il bot era spento durante la scadenza di un ban,
+     * il sistema rileverà comunque che expiresAt è passato
+     * e procederà con la notifica.
+     *
+     * ========================================================
+     */
+
+    initializeGlobalBanExpirationSystem(
+      client
+    );
+
+
+    /*
+     * ========================================================
+     * INIZIALIZZAZIONE COMPLETATA
+     * ========================================================
+     */
 
     console.log(
       'Inizializzazione completata con successo. Il servizio è operativo.'
@@ -295,9 +424,11 @@ client.once(
 );
 
 
-// ============================================================
-// GESTORE UNICO DELLE INTERAZIONI
-// ============================================================
+/*
+ * ============================================================
+ * GESTORE UNICO DELLE INTERAZIONI
+ * ============================================================
+ */
 
 client.on(
   'interactionCreate',
@@ -361,6 +492,7 @@ client.on(
               )
               .trim();
 
+
           const motivazione =
             interaction.fields
               .getTextInputValue(
@@ -368,12 +500,14 @@ client.on(
               )
               .trim();
 
+
           const fatti =
             interaction.fields
               .getTextInputValue(
                 'narrazione_fatti'
               )
               .trim();
+
 
           const prove =
             interaction.fields
@@ -608,6 +742,7 @@ client.on(
             await interaction.reply({
               content:
                 `❌ Si è verificato un errore: ${errorMessage}`,
+
               flags:
                 MessageFlags.Ephemeral,
             }).catch(
@@ -655,6 +790,7 @@ client.on(
           await interaction.reply({
             content:
               '❌ Si è verificato un errore durante l\'elaborazione del modal.',
+
             flags:
               MessageFlags.Ephemeral,
           }).catch(
@@ -763,6 +899,7 @@ client.on(
 
       const errorPayload:
         InteractionReplyOptions = {
+
         content:
           'Si è verificato un errore durante l\'elaborazione del comando.',
 
@@ -799,9 +936,11 @@ client.on(
 );
 
 
-// ============================================================
-// PREFIX COMMANDS
-// ============================================================
+/*
+ * ============================================================
+ * PREFIX COMMANDS
+ * ============================================================
+ */
 
 client.on(
   'messageCreate',
@@ -896,9 +1035,11 @@ client.on(
 );
 
 
-// ============================================================
-// EVENTI SERVER
-// ============================================================
+/*
+ * ============================================================
+ * EVENTI SERVER
+ * ============================================================
+ */
 
 client.on(
   'messageDelete',
@@ -909,6 +1050,7 @@ client.on(
     )
 );
 
+
 client.on(
   'guildMemberAdd',
   (member) =>
@@ -918,6 +1060,7 @@ client.on(
     )
 );
 
+
 client.on(
   'guildMemberRemove',
   (member) =>
@@ -926,6 +1069,7 @@ client.on(
       member
     )
 );
+
 
 client.on(
   'guildBanAdd',
@@ -938,6 +1082,7 @@ client.on(
     )
 );
 
+
 client.on(
   'guildBanRemove',
   (ban) =>
@@ -949,6 +1094,7 @@ client.on(
     )
 );
 
+
 client.on(
   'guildMemberUpdate',
   (oldMember, newMember) =>
@@ -959,6 +1105,7 @@ client.on(
     )
 );
 
+
 client.on(
   'roleCreate',
   (role) =>
@@ -967,6 +1114,7 @@ client.on(
       role
     )
 );
+
 
 client.on(
   'roleDelete',
@@ -977,6 +1125,7 @@ client.on(
     )
 );
 
+
 client.on(
   'roleUpdate',
   (oldRole, newRole) =>
@@ -986,6 +1135,7 @@ client.on(
       newRole
     )
 );
+
 
 client.on(
   'channelCreate',
@@ -1004,6 +1154,7 @@ client.on(
   }
 );
 
+
 client.on(
   'channelDelete',
   (channel) => {
@@ -1020,6 +1171,7 @@ client.on(
     );
   }
 );
+
 
 client.on(
   'channelUpdate',
@@ -1041,9 +1193,11 @@ client.on(
 );
 
 
-// ============================================================
-// ERRORES DEL CLIENT
-// ============================================================
+/*
+ * ============================================================
+ * ERRORI DEL CLIENT
+ * ============================================================
+ */
 
 client.on(
   'error',
@@ -1055,6 +1209,7 @@ client.on(
     );
   }
 );
+
 
 client.on(
   'shardError',
@@ -1068,9 +1223,11 @@ client.on(
 );
 
 
-// ============================================================
-// LOGIN
-// ============================================================
+/*
+ * ============================================================
+ * LOGIN
+ * ============================================================
+ */
 
 if (token) {
 

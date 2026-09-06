@@ -47,17 +47,50 @@ const partnershipInteractions_1 = require("./utils/partnershipInteractions");
 const interactionCreate_1 = __importDefault(require("./events/interactionCreate"));
 const databasehandler_1 = require("./handlers/databasehandler");
 const serverLogger_1 = require("./utils/serverLogger");
+/*
+ * ============================================================
+ * BAN GLOBALE
+ * ============================================================
+ *
+ * Importiamo esclusivamente il sistema che gestisce
+ * le scadenze dei ban globali.
+ *
+ * Il comando /ban-globale rimane nel proprio file.
+ *
+ * Questo sistema:
+ *
+ * - carica i ban temporanei salvati
+ * - ricrea i timer dopo un restart
+ * - rileva ban già scaduti
+ * - invia la notifica nel canale configurato
+ * - evita di perdere le scadenze al riavvio del bot
+ *
+ * ============================================================
+ */
+const ban_globale_1 = require("./commands/ban-globale");
+/*
+ * ============================================================
+ * DOTENV
+ * ============================================================
+ */
 dotenv_1.default.config({
     path: path.resolve(__dirname, '../.env'),
 });
+/*
+ * ============================================================
+ * TOKEN
+ * ============================================================
+ */
 const token = process.env.DISCORD_TOKEN?.trim();
 if (!token) {
     console.error('Errore: DISCORD_TOKEN mancante o vuoto in botcsd/.env.');
     process.exitCode = 1;
 }
-// ============================================================
-// CLIENT
-// ============================================================
+/*
+ * ============================================================
+ * CLIENT
+ * ============================================================
+ */
 class ExtendedClient extends discord_js_1.Client {
     commands = new discord_js_1.Collection();
     prefixCommands = new discord_js_1.Collection();
@@ -71,10 +104,17 @@ const client = new ExtendedClient({
         discord_js_1.GatewayIntentBits.MessageContent,
     ],
 });
+/*
+ * ============================================================
+ * PREFIX
+ * ============================================================
+ */
 const PREFIX = process.env.PREFIX || '!';
-// ============================================================
-// RICERCA FILE
-// ============================================================
+/*
+ * ============================================================
+ * RICERCA FILE
+ * ============================================================
+ */
 function getAllFiles(dirPath, arrayOfFiles = []) {
     if (!fs.existsSync(dirPath)) {
         return arrayOfFiles;
@@ -94,9 +134,11 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
     });
     return arrayOfFiles;
 }
-// ============================================================
-// CARICAMENTO COMANDI SLASH
-// ============================================================
+/*
+ * ============================================================
+ * CARICAMENTO COMANDI SLASH
+ * ============================================================
+ */
 function loadSlashCommands() {
     const commandsPath = path.join(__dirname, 'commands');
     const commandFiles = getAllFiles(commandsPath);
@@ -113,9 +155,11 @@ function loadSlashCommands() {
         }
     }
 }
-// ============================================================
-// CARICAMENTO COMANDI PREFIX
-// ============================================================
+/*
+ * ============================================================
+ * CARICAMENTO COMANDI PREFIX
+ * ============================================================
+ */
 function loadPrefixCommands() {
     const prefixPath = path.join(__dirname, 'prefixcommands');
     const prefixFiles = getAllFiles(prefixPath);
@@ -137,22 +181,63 @@ function loadPrefixCommands() {
         }
     }
 }
-// ============================================================
-// AVVIO
-// ============================================================
+/*
+ * ============================================================
+ * AVVIO
+ * ============================================================
+ */
 client.once('clientReady', async () => {
     if (!client.user) {
         return;
     }
     console.log(`Autenticazione riuscita. Bot attivo come: ${client.user.tag}`);
+    /*
+     * ========================================================
+     * DEPLOY COMANDI
+     * ========================================================
+     */
     await (0, deploycommands_1.deployCommands)();
+    /*
+     * ========================================================
+     * CARICAMENTO COMANDI
+     * ========================================================
+     */
     loadSlashCommands();
     loadPrefixCommands();
+    /*
+     * ========================================================
+     * INIZIALIZZAZIONE BAN GLOBALI
+     * ========================================================
+     *
+     * IMPORTANTE:
+     *
+     * Questo viene eseguito dopo che il bot è autenticato.
+     *
+     * Il sistema legge:
+     *
+     * data/global-bans.json
+     *
+     * e ricrea tutti i timer delle scadenze.
+     *
+     * Se il bot era spento durante la scadenza di un ban,
+     * il sistema rileverà comunque che expiresAt è passato
+     * e procederà con la notifica.
+     *
+     * ========================================================
+     */
+    (0, ban_globale_1.initializeGlobalBanExpirationSystem)(client);
+    /*
+     * ========================================================
+     * INIZIALIZZAZIONE COMPLETATA
+     * ========================================================
+     */
     console.log('Inizializzazione completata con successo. Il servizio è operativo.');
 });
-// ============================================================
-// GESTORE UNICO DELLE INTERAZIONI
-// ============================================================
+/*
+ * ============================================================
+ * GESTORE UNICO DELLE INTERAZIONI
+ * ============================================================
+ */
 client.on('interactionCreate', async (interaction) => {
     // --------------------------------------------------------
     // Partnership
@@ -366,9 +451,11 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 });
-// ============================================================
-// PREFIX COMMANDS
-// ============================================================
+/*
+ * ============================================================
+ * PREFIX COMMANDS
+ * ============================================================
+ */
 client.on('messageCreate', async (message) => {
     if (message.author.bot) {
         return;
@@ -405,9 +492,11 @@ client.on('messageCreate', async (message) => {
         catch { }
     }
 });
-// ============================================================
-// EVENTI SERVER
-// ============================================================
+/*
+ * ============================================================
+ * EVENTI SERVER
+ * ============================================================
+ */
 client.on('messageDelete', (message) => (0, serverLogger_1.logMessageDelete)(client, message));
 client.on('guildMemberAdd', (member) => (0, serverLogger_1.logMemberJoin)(client, member));
 client.on('guildMemberRemove', (member) => (0, serverLogger_1.logMemberLeave)(client, member));
@@ -436,18 +525,22 @@ client.on('channelUpdate', (oldChannel, newChannel) => {
     }
     (0, serverLogger_1.logChannelUpdate)(client, oldChannel, newChannel);
 });
-// ============================================================
-// ERRORES DEL CLIENT
-// ============================================================
+/*
+ * ============================================================
+ * ERRORI DEL CLIENT
+ * ============================================================
+ */
 client.on('error', (error) => {
     console.error('Errore del client Discord:', error);
 });
 client.on('shardError', (error) => {
     console.error('Errore della connessione Discord:', error);
 });
-// ============================================================
-// LOGIN
-// ============================================================
+/*
+ * ============================================================
+ * LOGIN
+ * ============================================================
+ */
 if (token) {
     client.login(token)
         .catch((error) => {
