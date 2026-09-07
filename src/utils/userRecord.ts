@@ -533,32 +533,63 @@ export async function addFormalWarning(
   return expiresAt;
 }
 
+
+
+
+
+import {
+  isOperatore,
+  isDirigenza,
+} from './staffManager';
+
+import {
+  getRestriction,
+} from './restrictionManager';
+
+
 export async function createUserInfoEmbed(
   user: User,
   member: GuildMember | APIInteractionGuildMember | null
 ): Promise<EmbedBuilder> {
+
   /*
    * IMPORTANTE:
-   * El registro del usuario es GLOBAL.
    *
-   * Por eso NO usamos guildId para obtener:
-   * - puntos
-   * - máximo de puntos
-   * - sanciones
-   * - notas
+   * Il registro dell'utente è GLOBALE.
+   *
+   * Per questo motivo NON utilizziamo guildId per ottenere:
+   * - punti
+   * - massimo dei punti
+   * - sanzioni
+   * - note
    * - reports
    * - status
    *
-   * El único dato dependiente del servidor aquí es:
+   * L'unico dato dipendente dal server è:
    * "Entrato nel Server"
    */
-  const record = await getUserRecord(user.id);
 
-  const createdTimestamp = Math.floor(
-    user.createdTimestamp / 1000
-  );
+  const record =
+    await getUserRecord(
+      user.id
+    );
 
-  let joinedTimestamp: number | null = null;
+
+  /*
+   * ==========================================
+   * INFORMAZIONI ACCOUNT
+   * ==========================================
+   */
+
+  const createdTimestamp =
+    Math.floor(
+      user.createdTimestamp / 1000
+    );
+
+
+  let joinedTimestamp:
+    number | null = null;
+
 
   if (
     member &&
@@ -566,115 +597,340 @@ export async function createUserInfoEmbed(
     typeof member.joinedTimestamp === 'number' &&
     member.joinedTimestamp
   ) {
-    joinedTimestamp = Math.floor(
-      member.joinedTimestamp / 1000
-    );
+
+    joinedTimestamp =
+      Math.floor(
+        member.joinedTimestamp / 1000
+      );
+
   } else if (
     member &&
     'joined_at' in member &&
     (member as any).joined_at
   ) {
-    const parsed = new Date(
-      (member as any).joined_at
-    ).getTime();
 
-    if (!isNaN(parsed)) {
-      joinedTimestamp = Math.floor(parsed / 1000);
+    const parsed =
+      new Date(
+        (member as any).joined_at
+      ).getTime();
+
+
+    if (
+      !isNaN(parsed)
+    ) {
+
+      joinedTimestamp =
+        Math.floor(
+          parsed / 1000
+        );
+
     }
   }
+
+
+  /*
+   * ==========================================
+   * REGISTRO
+   * ==========================================
+   */
 
   const formattedPoints =
     `${(record.points ?? 20.0).toFixed(1)}/` +
     `${(record.maxPoints ?? 20.0).toFixed(1)}`;
 
+
   const sanctionsHistory =
-    record.sanctionsHistory?.trim() || 'Nessuna';
+    record.sanctionsHistory?.trim()
+      || 'Nessuna';
+
 
   const notes =
-    record.notes?.trim() || 'Nessuna';
+    record.notes?.trim()
+      || 'Nessuna';
+
 
   const reports =
-    record.reports?.trim() || 'Nessuna';
+    record.reports?.trim()
+      || 'Nessuna';
+
+
+  /*
+   * ==========================================
+   * STATUS UTENTE
+   * ==========================================
+   *
+   * Ogni status viene controllato separatamente.
+   *
+   * Questo permette a un utente di avere
+   * contemporaneamente più status.
+   */
+
+  const statuses:
+    string[] = [];
+
+
+  /*
+   * OPERATORE
+   */
+
+  if (
+    isOperatore(
+      user.id
+    )
+  ) {
+
+    statuses.push(
+      '<:OperatoreCSD:1546618851788202104> Operatore Ufficiale C.S.D.'
+    );
+
+  }
+
+
+  /*
+   * DIRIGENZA
+   */
+
+  if (
+    isDirigenza(
+      user.id
+    )
+  ) {
+
+    statuses.push(
+      '<:DirezioneCSD:1546619172480614520> Dirigenza Esecutiva di C.S.D.'
+    );
+
+  }
+
+
+  /*
+   * RESTRIZIONE
+   */
+
+  const restriction =
+    getRestriction(
+      user.id
+    );
+
+
+  if (
+    restriction
+  ) {
+
+    statuses.push(
+      '<:restrizione:1546619953707491382> Restrizione Attiva'
+    );
+
+  }
+
+
+  /*
+   * SEGNALAZIONE
+   *
+   * Se il registro contiene una segnalazione,
+   * viene mostrato lo status corrispondente.
+   */
+
+  if (
+    record.reports?.trim()
+  ) {
+
+    statuses.push(
+      '<:segnalazione:1546621555466051584> Segnalazione a Carico.'
+    );
+
+  }
+
+
+  /*
+   * BAN GLOBALE
+   *
+   * NON viene controllato qui per il momento.
+   *
+   * Il manager del sistema di ban globale deve
+   * essere collegato quando sappiamo esattamente
+   * quale funzione utilizza il tuo bot.
+   */
+
+
+  /*
+   * Se nessuno status è presente,
+   * mostriamo "Nessuno".
+   */
 
   const status =
-    record.status?.trim() || 'Nessuno';
+    statuses.length > 0
+      ? statuses.join('\n')
+      : 'Nessuno';
 
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle(
-      `📋 Informazioni Utente & Registro — ${user.username}`
-    )
-    .setThumbnail(
-      user.displayAvatarURL({ size: 256 })
-    )
-    .addFields(
-      {
-        name: '👤 Nome Discord',
-        value: user.globalName
-          ? `${user.globalName} (\`${user.username}\`)`
-          : user.username,
-        inline: true,
-      },
-      {
-        name: '🏷️ Handle (@)',
-        value: `@${user.username}`,
-        inline: true,
-      },
-      {
-        name: '🆔 ID',
-        value: `\`${user.id}\``,
-        inline: true,
-      },
-      {
-        name: '📅 Creazione Account',
-        value:
-          `<t:${createdTimestamp}:F> ` +
-          `(<t:${createdTimestamp}:R>)`,
-        inline: true,
-      },
-      {
-        name: '📥 Entrato nel Server',
-        value: joinedTimestamp
-          ? `<t:${joinedTimestamp}:F> ` +
-            `(<t:${joinedTimestamp}:R>)`
-          : 'Non disponibile',
-        inline: true,
-      },
-      {
-        name: '──────────────',
-        value: '📁 **Registro Utente**',
-        inline: false,
-      },
-      {
-        name: '📜 Storico Sanzioni',
-        value: sanctionsHistory.slice(0, 1024),
-        inline: false,
-      },
-      {
-        name: '🪙 Totale punti',
-        value: `\`${formattedPoints}\``,
-        inline: true,
-      },
-      {
-        name: '📝 Note',
-        value: notes.slice(0, 1024),
-        inline: true,
-      },
-      {
-        name: '🚨 Segnalazioni a Carico',
-        value: reports.slice(0, 1024),
-        inline: true,
-      },
-      {
-        name: '📌 Status',
-        value: status.slice(0, 1024),
-        inline: true,
-      }
-    )
-    .setFooter({
-      text: 'Sistema Registro Utenti C.S.D.',
-    })
-    .setTimestamp();
+
+  /*
+   * ==========================================
+   * EMBED
+   * ==========================================
+   */
+
+  const embed =
+    new EmbedBuilder()
+      .setColor(
+        0x5865F2
+      )
+      .setTitle(
+        `📋 Informazioni Utente & Registro — ${user.username}`
+      )
+      .setThumbnail(
+        user.displayAvatarURL({
+          size: 256,
+        })
+      )
+      .addFields(
+
+        {
+          name:
+            '👤 Nome Discord',
+
+          value:
+            user.globalName
+              ? `${user.globalName} (\`${user.username}\`)`
+              : user.username,
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '🏷️ Handle (@)',
+
+          value:
+            `@${user.username}`,
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '🆔 ID',
+
+          value:
+            `\`${user.id}\``,
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '📅 Creazione Account',
+
+          value:
+            `<t:${createdTimestamp}:F> ` +
+            `(<t:${createdTimestamp}:R>)`,
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '📥 Entrato nel Server',
+
+          value:
+            joinedTimestamp
+              ? `<t:${joinedTimestamp}:F> ` +
+                `(<t:${joinedTimestamp}:R>)`
+              : 'Non disponibile',
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '──────────────',
+
+          value:
+            '📁 **Registro Utente**',
+
+          inline:
+            false,
+        },
+
+        {
+          name:
+            '📜 Storico Sanzioni',
+
+          value:
+            sanctionsHistory.slice(
+              0,
+              1024
+            ),
+
+          inline:
+            false,
+        },
+
+        {
+          name:
+            '🪙 Totale punti',
+
+          value:
+            `\`${formattedPoints}\``,
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '📝 Note',
+
+          value:
+            notes.slice(
+              0,
+              1024
+            ),
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '🚨 Segnalazioni a Carico',
+
+          value:
+            reports.slice(
+              0,
+              1024
+            ),
+
+          inline:
+            true,
+        },
+
+        {
+          name:
+            '📌 Status',
+
+          value:
+            status.slice(
+              0,
+              1024
+            ),
+
+          inline:
+            false,
+        }
+
+      )
+      .setFooter({
+        text:
+          'Sistema Registro Utenti C.S.D.',
+      })
+      .setTimestamp();
+
 
   return embed;
 }

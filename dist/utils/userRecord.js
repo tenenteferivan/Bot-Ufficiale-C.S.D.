@@ -366,49 +366,128 @@ async function addFormalWarning(userId, reason, durationDays) {
     });
     return expiresAt;
 }
+const staffManager_1 = require("./staffManager");
+const restrictionManager_1 = require("./restrictionManager");
 async function createUserInfoEmbed(user, member) {
     /*
      * IMPORTANTE:
-     * El registro del usuario es GLOBAL.
      *
-     * Por eso NO usamos guildId para obtener:
-     * - puntos
-     * - máximo de puntos
-     * - sanciones
-     * - notas
+     * Il registro dell'utente è GLOBALE.
+     *
+     * Per questo motivo NON utilizziamo guildId per ottenere:
+     * - punti
+     * - massimo dei punti
+     * - sanzioni
+     * - note
      * - reports
      * - status
      *
-     * El único dato dependiente del servidor aquí es:
+     * L'unico dato dipendente dal server è:
      * "Entrato nel Server"
      */
     const record = await getUserRecord(user.id);
+    /*
+     * ==========================================
+     * INFORMAZIONI ACCOUNT
+     * ==========================================
+     */
     const createdTimestamp = Math.floor(user.createdTimestamp / 1000);
     let joinedTimestamp = null;
     if (member &&
         'joinedTimestamp' in member &&
         typeof member.joinedTimestamp === 'number' &&
         member.joinedTimestamp) {
-        joinedTimestamp = Math.floor(member.joinedTimestamp / 1000);
+        joinedTimestamp =
+            Math.floor(member.joinedTimestamp / 1000);
     }
     else if (member &&
         'joined_at' in member &&
         member.joined_at) {
         const parsed = new Date(member.joined_at).getTime();
         if (!isNaN(parsed)) {
-            joinedTimestamp = Math.floor(parsed / 1000);
+            joinedTimestamp =
+                Math.floor(parsed / 1000);
         }
     }
+    /*
+     * ==========================================
+     * REGISTRO
+     * ==========================================
+     */
     const formattedPoints = `${(record.points ?? 20.0).toFixed(1)}/` +
         `${(record.maxPoints ?? 20.0).toFixed(1)}`;
-    const sanctionsHistory = record.sanctionsHistory?.trim() || 'Nessuna';
-    const notes = record.notes?.trim() || 'Nessuna';
-    const reports = record.reports?.trim() || 'Nessuna';
-    const status = record.status?.trim() || 'Nessuno';
+    const sanctionsHistory = record.sanctionsHistory?.trim()
+        || 'Nessuna';
+    const notes = record.notes?.trim()
+        || 'Nessuna';
+    const reports = record.reports?.trim()
+        || 'Nessuna';
+    /*
+     * ==========================================
+     * STATUS UTENTE
+     * ==========================================
+     *
+     * Ogni status viene controllato separatamente.
+     *
+     * Questo permette a un utente di avere
+     * contemporaneamente più status.
+     */
+    const statuses = [];
+    /*
+     * OPERATORE
+     */
+    if ((0, staffManager_1.isOperatore)(user.id)) {
+        statuses.push('<:OperatoreCSD:1546618851788202104> Operatore Ufficiale C.S.D.');
+    }
+    /*
+     * DIRIGENZA
+     */
+    if ((0, staffManager_1.isDirigenza)(user.id)) {
+        statuses.push('<:DirezioneCSD:1546619172480614520> Dirigenza Esecutiva di C.S.D.');
+    }
+    /*
+     * RESTRIZIONE
+     */
+    const restriction = (0, restrictionManager_1.getRestriction)(user.id);
+    if (restriction) {
+        statuses.push('<:restrizione:1546619953707491382> Restrizione Attiva');
+    }
+    /*
+     * SEGNALAZIONE
+     *
+     * Se il registro contiene una segnalazione,
+     * viene mostrato lo status corrispondente.
+     */
+    if (record.reports?.trim()) {
+        statuses.push('<:segnalazione:1546621555466051584> Segnalazione a Carico.');
+    }
+    /*
+     * BAN GLOBALE
+     *
+     * NON viene controllato qui per il momento.
+     *
+     * Il manager del sistema di ban globale deve
+     * essere collegato quando sappiamo esattamente
+     * quale funzione utilizza il tuo bot.
+     */
+    /*
+     * Se nessuno status è presente,
+     * mostriamo "Nessuno".
+     */
+    const status = statuses.length > 0
+        ? statuses.join('\n')
+        : 'Nessuno';
+    /*
+     * ==========================================
+     * EMBED
+     * ==========================================
+     */
     const embed = new discord_js_1.EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle(`📋 Informazioni Utente & Registro — ${user.username}`)
-        .setThumbnail(user.displayAvatarURL({ size: 256 }))
+        .setThumbnail(user.displayAvatarURL({
+        size: 256,
+    }))
         .addFields({
         name: '👤 Nome Discord',
         value: user.globalName
@@ -458,7 +537,7 @@ async function createUserInfoEmbed(user, member) {
     }, {
         name: '📌 Status',
         value: status.slice(0, 1024),
-        inline: true,
+        inline: false,
     })
         .setFooter({
         text: 'Sistema Registro Utenti C.S.D.',
