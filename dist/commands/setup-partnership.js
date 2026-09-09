@@ -41,6 +41,11 @@ async function execute(interaction) {
         });
         return;
     }
+    const botPermissions = channel.permissionsFor(interaction.client.user);
+    if (!botPermissions?.has([discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.SendMessages])) {
+        await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
     try {
         await (0, partnerships_1.savePartnershipConfig)(interaction.guild.id, channel.id, role.id);
         await interaction.reply({

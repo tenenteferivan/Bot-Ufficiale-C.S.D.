@@ -1,4 +1,5 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { sendUserNotification } from '../../utils/userNotification';
 
 export const name = 'ban';
 
@@ -31,6 +32,7 @@ export async function execute(message: Message, args: string[]): Promise<void> {
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
+    await sendUserNotification(target, embed);
   } catch (err) {
     await message.reply('❌ **Errore durante l\'esecuzione del ban.** Verifica i permessi.');
   }

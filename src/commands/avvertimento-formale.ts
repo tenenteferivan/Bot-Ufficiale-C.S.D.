@@ -10,6 +10,7 @@ import {
   isOperator,
   parseWarningDuration,
 } from '../utils/userRecord';
+import { sendUserNotification } from '../utils/userNotification';
 
 export const data = new SlashCommandBuilder()
   .setName('avvertimento-formale')
@@ -154,6 +155,8 @@ export async function execute(
         text: 'Registro Sanzioni C.S.D. • Scadenza Automatica',
       })
       .setTimestamp();
+
+    await sendUserNotification(targetUser, embed);
 
     await interaction.reply({
       embeds: [embed],

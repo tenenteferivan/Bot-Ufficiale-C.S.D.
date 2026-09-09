@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
 exports.saveLogConfig = saveLogConfig;
 exports.getLogConfig = getLogConfig;
+exports.getLogConfigs = getLogConfigs;
 exports.saveReportConfig = saveReportConfig;
 exports.getReportConfigs = getReportConfigs;
 exports.saveServerReportConfig = saveServerReportConfig;
@@ -238,6 +239,23 @@ function getLogConfig(guildId) {
                 return;
             }
             resolve(row?.log_channel_id ?? null);
+        });
+    });
+}
+function getLogConfigs() {
+    return new Promise((resolve, reject) => {
+        exports.db.all(`
+      SELECT guild_id, log_channel_id
+      FROM log_configs
+      `, [], (err, rows) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+            resolve((rows || []).map((row) => ({
+                guildId: row.guild_id,
+                channelId: row.log_channel_id,
+            })));
         });
     });
 }

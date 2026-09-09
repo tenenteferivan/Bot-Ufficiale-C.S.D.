@@ -1,9 +1,11 @@
 import {
   Client,
   ChatInputCommandInteraction,
+  EmbedBuilder,
   SlashCommandBuilder,
   MessageFlags,
 } from 'discord.js';
+import { sendUserNotification } from '../utils/userNotification';
 
 import fs from 'fs';
 import path from 'path';
@@ -82,14 +84,12 @@ function loadGlobalBanServers(): GlobalBanServers {
     );
   }
 
-  const guildIds = data.guildIds.filter(
-    (guildId: unknown): guildId is string =>
-      typeof guildId === 'string' &&
-      /^\d{17,20}$/.test(guildId)
-  );
+  if (!data.guildIds.every((guildId: unknown) => typeof guildId === 'string' && /^\d{17,20}$/.test(guildId))) {
+    throw new Error('global-ban-servers.json contiene ID guild non validi.');
+  }
 
   return {
-    guildIds,
+    guildIds: [...data.guildIds],
   };
 }
 
@@ -114,6 +114,12 @@ function loadGlobalBans(): GlobalBansData {
       'utf8'
     );
 
+    if (!content.trim()) {
+      const emptyData = { bans: [] };
+      saveGlobalBans(emptyData);
+      return emptyData;
+    }
+
     const data = JSON.parse(content);
 
     if (
@@ -125,15 +131,15 @@ function loadGlobalBans(): GlobalBansData {
       );
     }
 
-    const bans = data.bans.filter(
-      (ban: unknown): ban is GlobalBanRecord => {
+    const bans = data.bans.map(
+      (ban: unknown): GlobalBanRecord => {
         if (!ban || typeof ban !== 'object') {
-          return false;
+          throw new Error('Un record di ban globale non è valido.');
         }
 
         const record = ban as Record<string, unknown>;
 
-        return (
+        if (!(
           typeof record.userId === 'string' &&
           /^\d{17,20}$/.test(record.userId) &&
           typeof record.userTag === 'string' &&
@@ -145,7 +151,10 @@ function loadGlobalBans(): GlobalBansData {
           typeof record.createdAt === 'number' &&
           Number.isFinite(record.createdAt) &&
           typeof record.notified === 'boolean'
-        );
+        )) {
+          throw new Error('Un record di ban globale non è valido.');
+        }
+        return record as unknown as GlobalBanRecord;
       }
     );
 
@@ -419,7 +428,7 @@ async function notifyGlobalBanExpiration(
         `📅 **Scaduto:** ${expirationDate}`,
         `👮 **Operatore:** ${ban.operatorTag}`,
         '',
-        '⚠️ **È necessario procedere con l\'unban dell\'utente nei server interessati.**',
+        '✅ **Il ban è stato rimosso automaticamente dai server interessati.**',
       ].join('\n'),
       allowedMentions: {
         parse: ['everyone'],
@@ -436,6 +445,31 @@ async function notifyGlobalBanExpiration(
     );
 
     throw error;
+  }
+}
+
+async function removeExpiredGlobalBan(client: Client, ban: GlobalBanRecord): Promise<void> {
+  const configuredGuildId = process.env.GUILD_ID?.trim();
+  const { guildIds } = loadGlobalBanServers();
+
+  for (const guildId of guildIds) {
+    if (guildId === configuredGuildId) continue;
+
+    const guild = await client.guilds.fetch(guildId).catch(() => null);
+    if (!guild) throw new Error(`Il bot non è presente nella guild ${guildId}.`);
+
+    try {
+      await guild.bans.fetch(ban.userId);
+    } catch (error: any) {
+      if (error?.code === 10026) continue;
+      throw error;
+    }
+
+    await guild.bans.remove(
+      ban.userId,
+      `[BAN GLOBALE] Scadenza automatica | Motivo originale: ${ban.motivo}`,
+    );
+    console.log(`[BAN GLOBALE] Unban automatico eseguito nella guild ${guildId} per ${ban.userId}.`);
   }
 }
 
@@ -491,6 +525,7 @@ async function handleGlobalBanExpiration(
   }
 
   try {
+    await removeExpiredGlobalBan(client, ban);
     await notifyGlobalBanExpiration(
       client,
       ban
@@ -559,8 +594,7 @@ function scheduleGlobalBanExpiration(
    * Node.js ha un limite massimo per setTimeout.
    */
 
-  const MAX_TIMEOUT =
-    2_147_483_647;
+  const MAX_TIMEOUT = 60 * 60 * 1000;
 
   /*
    * Se il ban è già scaduto,
@@ -1204,6 +1238,20 @@ export async function execute(
   if (
     riusciti > 0
   ) {
+    await sendUserNotification(
+      user,
+      new EmbedBuilder()
+        .setColor(0x992D22)
+        .setTitle('🔨 Ban globale applicato')
+        .setDescription('È stato applicato un ban globale al tuo account.')
+        .addFields(
+          { name: 'Motivo', value: motivo },
+          { name: 'Durata', value: durata, inline: true },
+          { name: 'Operatore', value: interaction.user.tag, inline: true },
+        )
+        .setTimestamp(),
+    );
+
     try {
       const data =
         loadGlobalBans();

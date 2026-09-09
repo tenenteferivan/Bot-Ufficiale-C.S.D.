@@ -13,11 +13,13 @@ import {
   categoryFromValue,
   closeTicketRecord,
   createTicketRecord,
+  deleteTicketRecord,
   getTicket,
   getTicketConfig,
   isTicketGuild,
   isStaff,
   releaseClaim,
+  releaseTicketNumber,
   reserveTicketNumber,
   ticketCategories,
   ticketEmbed,
@@ -73,9 +75,11 @@ async function createTicketFromSelection(interaction: StringSelectMenuInteractio
   const parentId = panelChannel?.parentId ?? undefined;
   const username = safeChannelPart(interaction.user.username);
   let ticketChannel;
+  let reservedNumber: number | null = null;
+  let ticketRecordCreated = false;
 
   try {
-    const reservedNumber = await reserveTicketNumber(interaction.guild.id);
+    reservedNumber = await reserveTicketNumber(interaction.guild.id);
     const details = ticketCategories[category];
     ticketChannel = await interaction.guild.channels.create({
       name: `${details.emoji}-${String(reservedNumber).padStart(4, '0')}-${category}-${username}`.slice(0, 100),
@@ -86,6 +90,7 @@ async function createTicketFromSelection(interaction: StringSelectMenuInteractio
     });
 
     const ticket = await createTicketRecord(ticketChannel.id, interaction.guild.id, interaction.user.id, category, reservedNumber);
+    ticketRecordCreated = true;
     await ticketChannel.send({
       content: `<@&${config.staffRoleId}> ${interaction.user}`,
       embeds: [ticketEmbed(category, ticket.ticketNumber)],
@@ -93,7 +98,17 @@ async function createTicketFromSelection(interaction: StringSelectMenuInteractio
     });
     await interaction.editReply(`✅ Ticket creato: ${ticketChannel}`);
   } catch (error) {
+    if (ticketRecordCreated && ticketChannel) {
+      await deleteTicketRecord(ticketChannel.id).catch((cleanupError) => {
+        console.error('Impossibile eliminare il ticket dal database durante il rollback:', cleanupError);
+      });
+    }
     if (ticketChannel) await ticketChannel.delete('Rollback apertura ticket').catch(() => undefined);
+    if (reservedNumber !== null) {
+      await releaseTicketNumber(interaction.guild.id, reservedNumber).catch((cleanupError) => {
+        console.error('Impossibile recuperare il numero del ticket durante il rollback:', cleanupError);
+      });
+    }
     console.error('Errore durante la creazione del ticket:', error);
     await interaction.editReply('❌ Non è stato possibile creare il ticket. Riprova tra poco.');
   }
@@ -157,6 +172,6 @@ async function closeTicket(interaction: ModalSubmitInteraction): Promise<void> {
     console.error('Errore durante la generazione del transcript ticket:', error);
   }
   await closeTicketRecord(ticket.channelId);
-  await interaction.editReply(`🔒 Ticket chiuso. Il transcript è stato inviato nei log e in DM.`);
+  await interaction.editReply(`🔒 Ticket chiuso. Il transcript è stato pubblicato nel ticket.`);
   await interaction.channel.delete(`Ticket chiuso da ${interaction.user.tag}: ${reason.slice(0, 400)}`);
 }

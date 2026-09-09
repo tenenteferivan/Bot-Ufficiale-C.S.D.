@@ -1,10 +1,11 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scrypt, timingSafeEqual } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
 import { mkdtemp, open, readFile, readdir, rm, stat, unlink, writeFile } from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { pipeline } from 'stream/promises';
 import { Writable } from 'stream';
+import { promisify } from 'util';
 import { Client } from 'discord.js';
 import { projectRoot } from './projectPaths';
 
@@ -16,6 +17,7 @@ const keySalt = Buffer.from('csd-archivio-v1', 'utf8');
 const algorithm = 'aes-256-gcm';
 const ivLength = 12;
 const tagLength = 16;
+const scryptAsync = promisify(scrypt);
 
 export interface ArchiveEntry {
   name: string;
@@ -54,8 +56,8 @@ function getArchiveMetadataPath(name: string): string {
   return path.join(archiveDirectory, `${name}.meta.json`);
 }
 
-function deriveKey(): Buffer {
-  return scryptSync(getArchivePassword(), keySalt, 32);
+async function deriveKey(): Promise<Buffer> {
+  return (await scryptAsync(getArchivePassword(), keySalt, 32)) as Buffer;
 }
 
 async function ensureArchiveDirectories(): Promise<void> {
@@ -91,7 +93,7 @@ export async function encryptFileStream(inputPath: string, name: string): Promis
   await ensureArchiveDirectories();
   const outputPath = getArchivePath(name);
   const iv = randomBytes(ivLength);
-  const cipher = createCipheriv(algorithm, deriveKey(), iv);
+  const cipher = createCipheriv(algorithm, await deriveKey(), iv);
   const writeStream = createWriteStream(outputPath, { flags: 'wx' });
 
   const writeFinalTag = new Writable({
@@ -137,7 +139,7 @@ export async function decryptFileStream(name: string, outputPath: string): Promi
     await fileHandle.read(ivBuffer, 0, ivBuffer.length, fileHeader.length);
     await fileHandle.read(tagBuffer, 0, tagBuffer.length, fileInfo.size - tagLength);
 
-    const decipher = createDecipheriv(algorithm, deriveKey(), ivBuffer);
+    const decipher = createDecipheriv(algorithm, await deriveKey(), ivBuffer);
     decipher.setAuthTag(tagBuffer);
 
     const source = createReadStream(inputPath, {
@@ -205,18 +207,7 @@ export async function notifyArchiveOwner(
 ): Promise<void> {
   const ownerId = process.env.OWNER_ID?.trim();
   if (!ownerId) return;
-
-  try {
-    const owner = await client.users.fetch(ownerId);
-    await owner.send([
-      '📦 Operazione archivio cifrato',
-      `Operazione: ${operation}`,
-      `Timestamp: ${new Date().toISOString()}`,
-      `Utente: ${userId}`,
-      `Esito: ${success ? 'riuscita' : 'fallita'}`,
-      `Dettagli: ${detail}`,
-    ].join('\n'));
-  } catch (error) {
-    console.error('Impossibile notificare il proprietario dell\'archivio:', error);
-  }
+  console.log(
+    `[ARCHIVIO] ${operation} | utente ${userId} | esito ${success ? 'riuscita' : 'fallita'} | ${detail}`
+  );
 }

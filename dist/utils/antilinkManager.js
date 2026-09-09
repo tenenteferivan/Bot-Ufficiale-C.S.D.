@@ -14,120 +14,108 @@ const path_1 = __importDefault(require("path"));
 const DATA_DIR = path_1.default.resolve(__dirname, '../../data');
 const FILE_PATH = path_1.default.join(DATA_DIR, 'antilink.json');
 function ensureDataDirectory() {
-    if (!fs_1.default.existsSync(DATA_DIR)) {
-        fs_1.default.mkdirSync(DATA_DIR, {
-            recursive: true,
-        });
-    }
+    if (!fs_1.default.existsSync(DATA_DIR))
+        fs_1.default.mkdirSync(DATA_DIR, { recursive: true });
+}
+function createDefaultConfig() {
+    return { enabled: false, whitelistedUsers: [], whitelistedRoles: [] };
+}
+function saveData(data) {
+    ensureDataDirectory();
+    const temporaryPath = `${FILE_PATH}.tmp`;
+    fs_1.default.writeFileSync(temporaryPath, JSON.stringify(data, null, 2), 'utf8');
+    fs_1.default.renameSync(temporaryPath, FILE_PATH);
 }
 function loadData() {
     ensureDataDirectory();
     if (!fs_1.default.existsSync(FILE_PATH)) {
-        const data = {
-            guilds: {},
-        };
-        fs_1.default.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
-        return data;
+        const emptyData = { guilds: {} };
+        saveData(emptyData);
+        return emptyData;
     }
-    const raw = fs_1.default
-        .readFileSync(FILE_PATH, 'utf8')
-        .trim();
+    const raw = fs_1.default.readFileSync(FILE_PATH, 'utf8').trim();
     if (!raw) {
-        return {
-            guilds: {},
+        const emptyData = { guilds: {} };
+        saveData(emptyData);
+        return emptyData;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    }
+    catch (error) {
+        console.error('[ANTILINK] JSON corrotto in antilink.json:', error);
+        throw new Error('Il file antilink.json contiene JSON non valido.');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+        !('guilds' in parsed) || !parsed.guilds || typeof parsed.guilds !== 'object' || Array.isArray(parsed.guilds)) {
+        console.error('[ANTILINK] Struttura non valida in antilink.json.');
+        throw new Error('La struttura di antilink.json non è valida.');
+    }
+    const guilds = {};
+    for (const [guildId, value] of Object.entries(parsed.guilds)) {
+        const config = value;
+        if (typeof config.enabled !== 'boolean' ||
+            !Array.isArray(config.whitelistedUsers) ||
+            !Array.isArray(config.whitelistedRoles) ||
+            !config.whitelistedUsers.every((id) => typeof id === 'string') ||
+            !config.whitelistedRoles.every((id) => typeof id === 'string')) {
+            console.error(`[ANTILINK] Configurazione non valida per la guild ${guildId}.`);
+            throw new Error('La struttura di antilink.json non è valida.');
+        }
+        guilds[guildId] = {
+            enabled: config.enabled,
+            whitelistedUsers: [...config.whitelistedUsers],
+            whitelistedRoles: [...config.whitelistedRoles],
         };
     }
-    return JSON.parse(raw);
+    return { guilds };
 }
-function saveData(data) {
-    ensureDataDirectory();
-    fs_1.default.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
-}
-function createDefaultConfig() {
-    return {
-        enabled: false,
-        whitelistedUsers: [],
-        whitelistedRoles: [],
-    };
+const cachedData = loadData();
+function getCachedConfig(guildId) {
+    if (!cachedData.guilds[guildId]) {
+        cachedData.guilds[guildId] = createDefaultConfig();
+    }
+    return cachedData.guilds[guildId];
 }
 function getAntiLinkConfig(guildId) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-        saveData(data);
-    }
-    return data.guilds[guildId];
+    return getCachedConfig(guildId);
 }
 function setAntiLinkEnabled(guildId, enabled) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-    }
-    data.guilds[guildId].enabled =
-        enabled;
-    saveData(data);
+    getCachedConfig(guildId).enabled = enabled;
+    saveData(cachedData);
 }
 function addWhitelistedUser(guildId, userId) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-    }
-    const users = data.guilds[guildId]
-        .whitelistedUsers;
-    if (users.includes(userId)) {
+    const users = getCachedConfig(guildId).whitelistedUsers;
+    if (users.includes(userId))
         return false;
-    }
     users.push(userId);
-    saveData(data);
+    saveData(cachedData);
     return true;
 }
 function removeWhitelistedUser(guildId, userId) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-    }
-    const users = data.guilds[guildId]
-        .whitelistedUsers;
+    const users = getCachedConfig(guildId).whitelistedUsers;
     const index = users.indexOf(userId);
-    if (index === -1) {
+    if (index === -1)
         return false;
-    }
     users.splice(index, 1);
-    saveData(data);
+    saveData(cachedData);
     return true;
 }
 function addWhitelistedRole(guildId, roleId) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-    }
-    const roles = data.guilds[guildId]
-        .whitelistedRoles;
-    if (roles.includes(roleId)) {
+    const roles = getCachedConfig(guildId).whitelistedRoles;
+    if (roles.includes(roleId))
         return false;
-    }
     roles.push(roleId);
-    saveData(data);
+    saveData(cachedData);
     return true;
 }
 function removeWhitelistedRole(guildId, roleId) {
-    const data = loadData();
-    if (!data.guilds[guildId]) {
-        data.guilds[guildId] =
-            createDefaultConfig();
-    }
-    const roles = data.guilds[guildId]
-        .whitelistedRoles;
+    const roles = getCachedConfig(guildId).whitelistedRoles;
     const index = roles.indexOf(roleId);
-    if (index === -1) {
+    if (index === -1)
         return false;
-    }
     roles.splice(index, 1);
-    saveData(data);
+    saveData(cachedData);
     return true;
 }

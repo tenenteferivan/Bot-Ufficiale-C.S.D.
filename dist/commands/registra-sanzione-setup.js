@@ -57,6 +57,16 @@ async function execute(interaction) {
     // RECUPERA CANALE
     // ============================================================
     const channel = interaction.options.getChannel('canale', true);
+    const configuredChannel = channel;
+    if (configuredChannel.guildId !== interaction.guild.id || !configuredChannel.isTextBased() || typeof configuredChannel.send !== 'function') {
+        await interaction.reply({ content: '❌ Il canale deve essere testuale e appartenere a questo server.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
+    const botPermissions = configuredChannel.permissionsFor(interaction.client.user);
+    if (!botPermissions?.has([discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.SendMessages])) {
+        await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
     // ============================================================
     // SALVA CONFIGURAZIONE
     // ============================================================

@@ -4,6 +4,7 @@ exports.data = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const permissions_1 = require("../../utils/permissions");
+const modLogger_1 = require("../../utils/modLogger");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('ban')
     .setDescription('Bandisce un utente dal server in modo temporaneo o permanente.')
@@ -29,6 +30,7 @@ async function execute(interaction) {
             .setFooter({ text: `Eseguito da ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
             .setTimestamp();
         await interaction.reply({ embeds: [embed] });
+        await (0, modLogger_1.sendModNotification)(interaction);
     }
     catch (error) {
         await interaction.reply({

@@ -3,6 +3,7 @@
 import {
   ChatInputCommandInteraction,
   MessageFlags,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   ChannelType,
 } from 'discord.js';
@@ -100,6 +101,18 @@ export async function execute(
 
   const channel =
     interaction.options.getChannel('canale', true);
+
+  const configuredChannel = channel as any;
+  if (configuredChannel.guildId !== interaction.guild.id || !configuredChannel.isTextBased() || typeof configuredChannel.send !== 'function') {
+    await interaction.reply({ content: '❌ Il canale deve essere testuale e appartenere a questo server.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const botPermissions = configuredChannel.permissionsFor(interaction.client.user);
+  if (!botPermissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
+    await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: MessageFlags.Ephemeral });
+    return;
+  }
 
 
   // ============================================================

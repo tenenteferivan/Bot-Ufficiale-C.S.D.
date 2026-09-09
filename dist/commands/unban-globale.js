@@ -17,15 +17,19 @@ function loadGlobalBanServers() {
         throw new Error('Il file data/global-ban-servers.json non esiste.');
     }
     const content = fs_1.default.readFileSync(GLOBAL_BAN_SERVERS_FILE, 'utf8');
+    if (!content.trim()) {
+        throw new Error('Il file data/global-ban-servers.json è vuoto.');
+    }
     const data = JSON.parse(content);
     if (!data ||
         !Array.isArray(data.guildIds)) {
         throw new Error('Formato di global-ban-servers.json non valido.');
     }
-    const guildIds = data.guildIds.filter((guildId) => typeof guildId === 'string' &&
-        /^\d{17,20}$/.test(guildId));
+    if (!data.guildIds.every((guildId) => typeof guildId === 'string' && /^\d{17,20}$/.test(guildId))) {
+        throw new Error('global-ban-servers.json contiene ID guild non validi.');
+    }
     return {
-        guildIds,
+        guildIds: [...data.guildIds],
     };
 }
 exports.data = new discord_js_1.SlashCommandBuilder()

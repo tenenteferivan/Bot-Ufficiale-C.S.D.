@@ -7,24 +7,32 @@ const databasehandler_1 = require("../handlers/databasehandler");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('setup-logs')
     .setDescription('Configura il canale per i log del server.')
-    .setDefaultMemberPermissions(discord_js_1.PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(discord_js_1.PermissionFlagsBits.Administrator | discord_js_1.PermissionFlagsBits.ManageGuild)
     .addChannelOption((option) => option
     .setName('canale')
     .setDescription('Canale testuale per i log')
     .addChannelTypes(discord_js_1.ChannelType.GuildText)
-    .setRequired(true));
+    .setRequired(false));
 async function execute(interaction) {
     if (!interaction.guild) {
         await interaction.reply({ content: '❌ Comando disponibile solo nei server.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
-    if (!interaction.memberPermissions?.has(discord_js_1.PermissionFlagsBits.Administrator)) {
-        await interaction.reply({ content: '❌ Solo gli amministratori possono configurare i log.', flags: discord_js_1.MessageFlags.Ephemeral });
+    const canManageLogs = interaction.memberPermissions?.has(discord_js_1.PermissionFlagsBits.Administrator) ||
+        interaction.memberPermissions?.has(discord_js_1.PermissionFlagsBits.ManageGuild);
+    if (!canManageLogs) {
+        await interaction.reply({ content: '❌ Sono necessari i permessi Amministratore o Gestisci Server.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
-    const channel = interaction.options.getChannel('canale', true);
-    if (!channel.isTextBased()) {
-        await interaction.reply({ content: '❌ Il canale deve essere un canale testuale.', flags: discord_js_1.MessageFlags.Ephemeral });
+    const channel = interaction.options.getChannel('canale') ??
+        (interaction.channel?.isTextBased() ? interaction.channel : null);
+    if (!channel || channel.guildId !== interaction.guild.id || !channel.isTextBased() || !('send' in channel)) {
+        await interaction.reply({ content: '❌ Il canale corrente o selezionato deve essere un canale testuale del server.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
+    const botPermissions = channel.permissionsFor(interaction.client.user);
+    if (!botPermissions?.has([discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.SendMessages])) {
+        await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
     try {

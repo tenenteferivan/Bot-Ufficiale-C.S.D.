@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { parseDuration } from '../../utils/timeParser';
 import { requireGuildPermission } from '../../utils/permissions';
+import { sendModNotification } from '../../utils/modLogger';
 
 export const data = new SlashCommandBuilder()
   .setName('timeout')
@@ -42,6 +43,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
+    await sendModNotification(interaction);
   } catch (error) {
     await interaction.reply({ content: '❌ **Impossibile applicare il timeout all\'utente.**', flags: MessageFlags.Ephemeral });
   }

@@ -51,6 +51,7 @@ const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const promises_2 = require("stream/promises");
 const stream_1 = require("stream");
+const util_1 = require("util");
 const projectPaths_1 = require("./projectPaths");
 const archiveDirectory = path.join(projectPaths_1.projectRoot, 'cripteddata');
 const tempDirectory = path.join(projectPaths_1.projectRoot, 'tmp_archive');
@@ -60,6 +61,7 @@ const keySalt = Buffer.from('csd-archivio-v1', 'utf8');
 const algorithm = 'aes-256-gcm';
 const ivLength = 12;
 const tagLength = 16;
+const scryptAsync = (0, util_1.promisify)(crypto_1.scrypt);
 function getArchivePassword() {
     return process.env.PASSWORD_ARCHIVIO ?? '';
 }
@@ -83,8 +85,8 @@ function getArchivePath(name) {
 function getArchiveMetadataPath(name) {
     return path.join(archiveDirectory, `${name}.meta.json`);
 }
-function deriveKey() {
-    return (0, crypto_1.scryptSync)(getArchivePassword(), keySalt, 32);
+async function deriveKey() {
+    return (await scryptAsync(getArchivePassword(), keySalt, 32));
 }
 async function ensureArchiveDirectories() {
     await Promise.all([
@@ -118,7 +120,7 @@ async function encryptFileStream(inputPath, name) {
     await ensureArchiveDirectories();
     const outputPath = getArchivePath(name);
     const iv = (0, crypto_1.randomBytes)(ivLength);
-    const cipher = (0, crypto_1.createCipheriv)(algorithm, deriveKey(), iv);
+    const cipher = (0, crypto_1.createCipheriv)(algorithm, await deriveKey(), iv);
     const writeStream = (0, fs_1.createWriteStream)(outputPath, { flags: 'wx' });
     const writeFinalTag = new stream_1.Writable({
         write(chunk, _encoding, callback) {
@@ -158,7 +160,7 @@ async function decryptFileStream(name, outputPath) {
         }
         await fileHandle.read(ivBuffer, 0, ivBuffer.length, fileHeader.length);
         await fileHandle.read(tagBuffer, 0, tagBuffer.length, fileInfo.size - tagLength);
-        const decipher = (0, crypto_1.createDecipheriv)(algorithm, deriveKey(), ivBuffer);
+        const decipher = (0, crypto_1.createDecipheriv)(algorithm, await deriveKey(), ivBuffer);
         decipher.setAuthTag(tagBuffer);
         const source = (0, fs_1.createReadStream)(inputPath, {
             start: fileHeader.length + ivLength,
@@ -219,18 +221,5 @@ async function notifyArchiveOwner(client, operation, userId, success, detail) {
     const ownerId = process.env.OWNER_ID?.trim();
     if (!ownerId)
         return;
-    try {
-        const owner = await client.users.fetch(ownerId);
-        await owner.send([
-            '📦 Operazione archivio cifrato',
-            `Operazione: ${operation}`,
-            `Timestamp: ${new Date().toISOString()}`,
-            `Utente: ${userId}`,
-            `Esito: ${success ? 'riuscita' : 'fallita'}`,
-            `Dettagli: ${detail}`,
-        ].join('\n'));
-    }
-    catch (error) {
-        console.error('Impossibile notificare il proprietario dell\'archivio:', error);
-    }
+    console.log(`[ARCHIVIO] ${operation} | utente ${userId} | esito ${success ? 'riuscita' : 'fallita'} | ${detail}`);
 }

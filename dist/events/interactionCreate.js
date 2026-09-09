@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const discord_js_1 = require("discord.js");
-const modLogger_1 = require("../utils/modLogger");
 const userRecord_1 = require("../utils/userRecord");
 const databasehandler_1 = require("../handlers/databasehandler");
+const userNotification_1 = require("../utils/userNotification");
+const announcementDistributor_1 = require("../utils/announcementDistributor");
 exports.default = {
     name: discord_js_1.Events.InteractionCreate,
     async execute(interaction) {
@@ -89,6 +90,12 @@ exports.default = {
                         text: 'Sistema Segnalazioni C.S.D.',
                     })
                         .setTimestamp();
+                    const reportedUser = await interaction.client.users.fetch(userId).catch(() => null);
+                    if (reportedUser) {
+                        await (0, userNotification_1.sendUserNotification)(reportedUser, new discord_js_1.EmbedBuilder(embed.toJSON())
+                            .setTitle(`🚨 Hai ricevuto una segnalazione #${reportId}`)
+                            .setDescription('È stata registrata una segnalazione relativa al tuo account.'));
+                    }
                     // ------------------------------------------------------
                     // Recupera configurazioni
                     // ------------------------------------------------------
@@ -118,7 +125,7 @@ exports.default = {
                                 failed++;
                                 continue;
                             }
-                            await channel.send({
+                            await (0, announcementDistributor_1.sendWithRateLimitRetry)(channel, {
                                 embeds: [embed],
                             });
                             sent++;
@@ -274,7 +281,7 @@ exports.default = {
                                 continue;
                             }
                             // Invia sanzione
-                            await channel.send({
+                            await (0, announcementDistributor_1.sendWithRateLimitRetry)(channel, {
                                 embeds: [embed],
                             });
                             sent++;
@@ -338,8 +345,6 @@ exports.default = {
         try {
             // Esegue il comando
             await command.execute(interaction);
-            // Notifica privata/moderazione
-            await (0, modLogger_1.sendModNotification)(interaction);
         }
         catch (error) {
             console.error(`Errore durante l'esecuzione del comando Slash /${interaction.commandName}:`, error);

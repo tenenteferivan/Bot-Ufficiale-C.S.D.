@@ -1,4 +1,5 @@
 import { EmbedBuilder, Message, PermissionFlagsBits } from 'discord.js';
+import { sendUserNotification } from '../../utils/userNotification';
 
 export const name = 'warn';
 
@@ -13,7 +14,11 @@ export async function execute(message: Message, args: string[]): Promise<void> {
     await message.reply('Sintassi: !warn @utente <motivo>');
     return;
   }
-  const embed = new EmbedBuilder().setColor(0xFEE75C).setTitle('Avvertimento').setDescription(`Motivo: ${reason}`).setTimestamp();
+  const embed = new EmbedBuilder()
+    .setColor(0xFEE75C)
+    .setTitle('⚠️ Hai ricevuto un avvertimento')
+    .setDescription(`Motivo: ${reason}`)
+    .setTimestamp();
   await message.reply(`Avvertimento inviato a ${target}.`);
-  await target.send({ embeds: [embed] }).catch(() => undefined);
+  await sendUserNotification(target, embed);
 }

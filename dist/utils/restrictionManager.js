@@ -34,9 +34,11 @@ function ensureDataDirectory() {
 function loadRestrictions() {
     ensureDataDirectory();
     if (!fs_1.default.existsSync(RESTRICTIONS_FILE)) {
-        return {
+        const emptyData = {
             restrictions: [],
         };
+        saveRestrictions(emptyData);
+        return emptyData;
     }
     try {
         const content = fs_1.default.readFileSync(RESTRICTIONS_FILE, 'utf8');
@@ -45,26 +47,28 @@ function loadRestrictions() {
             !Array.isArray(data.restrictions)) {
             throw new Error('Formato di restrictions.json non valido.');
         }
-        return {
-            restrictions: data.restrictions.filter((restriction) => {
-                if (!restriction ||
-                    typeof restriction !== 'object') {
-                    return false;
-                }
-                const record = restriction;
-                return (typeof record.userId === 'string' &&
-                    /^\d{17,20}$/.test(record.userId) &&
-                    typeof record.userTag === 'string' &&
-                    typeof record.motivo === 'string' &&
-                    typeof record.durata === 'string' &&
-                    typeof record.expiresAt === 'number' &&
-                    Number.isFinite(record.expiresAt) &&
-                    typeof record.operatorId === 'string' &&
-                    typeof record.operatorTag === 'string' &&
-                    typeof record.createdAt === 'number' &&
-                    Number.isFinite(record.createdAt));
-            }),
-        };
+        const restrictions = data.restrictions.map((restriction) => {
+            if (!restriction ||
+                typeof restriction !== 'object') {
+                throw new Error('Una restrizione non è valida.');
+            }
+            const record = restriction;
+            if (!(typeof record.userId === 'string' &&
+                /^\d{17,20}$/.test(record.userId) &&
+                typeof record.userTag === 'string' &&
+                typeof record.motivo === 'string' &&
+                typeof record.durata === 'string' &&
+                typeof record.expiresAt === 'number' &&
+                Number.isFinite(record.expiresAt) &&
+                typeof record.operatorId === 'string' &&
+                typeof record.operatorTag === 'string' &&
+                typeof record.createdAt === 'number' &&
+                Number.isFinite(record.createdAt))) {
+                throw new Error('Una restrizione non è valida.');
+            }
+            return record;
+        });
+        return { restrictions };
     }
     catch (error) {
         console.error('[RESTRICTION] Impossibile leggere restrictions.json:', error);

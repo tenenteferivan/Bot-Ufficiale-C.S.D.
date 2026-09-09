@@ -5,6 +5,7 @@ exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const timeParser_1 = require("../../utils/timeParser");
 const permissions_1 = require("../../utils/permissions");
+const modLogger_1 = require("../../utils/modLogger");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('timeout')
     .setDescription('Mette un utente in isolamento temporaneo.')
@@ -36,6 +37,7 @@ async function execute(interaction) {
             .setFooter({ text: `Eseguito da ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
             .setTimestamp();
         await interaction.reply({ embeds: [embed] });
+        await (0, modLogger_1.sendModNotification)(interaction);
     }
     catch (error) {
         await interaction.reply({ content: '❌ **Impossibile applicare il timeout all\'utente.**', flags: discord_js_1.MessageFlags.Ephemeral });

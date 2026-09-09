@@ -1,5 +1,7 @@
 import {
+  ChannelType,
   ChatInputCommandInteraction,
+  PermissionFlagsBits,
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -18,6 +20,7 @@ export const data = new SlashCommandBuilder()
       .setDescription(
         'Canale dove verranno pubblicate le segnalazioni dei server.'
       )
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
       .setRequired(true)
   );
 
@@ -46,6 +49,18 @@ export async function execute(
     'canale',
     true
   );
+
+  const configuredChannel = channel as any;
+  if (configuredChannel.guildId !== interaction.guild.id || !configuredChannel.isTextBased() || typeof configuredChannel.send !== 'function') {
+    await interaction.reply({ content: '❌ Il canale deve essere testuale e appartenere a questo server.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const botPermissions = configuredChannel.permissionsFor(interaction.client.user);
+  if (!botPermissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
+    await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: MessageFlags.Ephemeral });
+    return;
+  }
 
   try {
     await saveServerReportConfig(

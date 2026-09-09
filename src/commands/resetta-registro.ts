@@ -5,8 +5,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 
-import { isOperator } from '../utils/userRecord';
-import { db } from '../handlers/databasehandler';
+import { isOperator, resetUserRecord } from '../utils/userRecord';
 
 // Creazione comando
 export const data = new SlashCommandBuilder()
@@ -91,69 +90,7 @@ export async function execute(
      * per questo user_id.
      */
 
-    // 1. Elimina tutte le sanzioni dell'utente
-    await new Promise<void>((resolve, reject) => {
-      db.run(
-        `
-        DELETE FROM user_sanctions
-        WHERE user_id = ?
-        `,
-        [targetUser.id],
-        (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          resolve();
-        }
-      );
-    });
-
-    // 2. Resetta completamente il registro principale dell'utente
-    await new Promise<void>((resolve, reject) => {
-      db.run(
-        `
-        UPDATE user_records
-        SET
-          points = 20.0,
-          max_points = 20.0,
-          sanctions_history = '',
-          notes = '',
-          reports = '',
-          status = ''
-        WHERE user_id = ?
-        `,
-        [targetUser.id],
-        (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          resolve();
-        }
-      );
-    });
-
-    // 3. Elimina tutte le note dell'utente
-    await new Promise<void>((resolve, reject) => {
-      db.run(
-        `
-        DELETE FROM user_notes
-        WHERE user_id = ?
-        `,
-        [targetUser.id],
-        (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          resolve();
-        }
-      );
-    });
+    await resetUserRecord(targetUser.id);
 
     // Crea il messaggio di conferma
     const embed = new EmbedBuilder()

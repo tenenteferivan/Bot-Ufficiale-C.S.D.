@@ -37,7 +37,31 @@ exports.deployCommands = deployCommands;
 const discord_js_1 = require("discord.js");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const ticketScope_1 = require("./utils/ticketScope");
+function getCommandModules(commandModule) {
+    if (Array.isArray(commandModule)) {
+        return commandModule.flatMap((module) => getCommandModules(module));
+    }
+    if (!commandModule || typeof commandModule !== 'object') {
+        return [];
+    }
+    const moduleRecord = commandModule;
+    if (moduleRecord.default) {
+        const defaultModules = getCommandModules(moduleRecord.default);
+        if (defaultModules.length > 0)
+            return defaultModules;
+    }
+    if ('data' in moduleRecord && 'execute' in moduleRecord) {
+        return [commandModule];
+    }
+    return [];
+}
+function getSubcommandNames(command) {
+    const commandJson = command.toJSON();
+    const options = commandJson.options ?? [];
+    return options
+        .filter((option) => option.type === 1 || option.type === 2)
+        .map((option) => option.name);
+}
 const style = {
     reset: '\x1b[0m',
     bold: '\x1b[1m',
@@ -65,6 +89,30 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
     });
     return arrayOfFiles;
 }
+function loadOnlyGuildCommands(configPath) {
+    const emptyConfig = JSON.stringify({ commands: [] }, null, 2) + '\n';
+    if (!fs.existsSync(configPath)) {
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(configPath, emptyConfig, 'utf8');
+        return new Set();
+    }
+    try {
+        const configContent = fs.readFileSync(configPath, 'utf8').trim();
+        if (!configContent) {
+            fs.writeFileSync(configPath, emptyConfig, 'utf8');
+            return new Set();
+        }
+        const config = JSON.parse(configContent);
+        if (!Array.isArray(config.commands)) {
+            throw new Error('onlyguild.json non contiene una lista valida di comandi.');
+        }
+        return new Set(config.commands.filter((command) => typeof command === 'string' && command.trim().length > 0).map((command) => command.trim()));
+    }
+    catch (error) {
+        console.error('Impossibile leggere config/onlyguild.json: il deploy verrà annullato.', error);
+        throw error;
+    }
+}
 async function deployCommands() {
     const token = process.env.DISCORD_TOKEN;
     const clientId = process.env.CLIENT_ID;
@@ -78,56 +126,88 @@ async function deployCommands() {
     console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
     try {
         const commandsPayload = [];
-        let slashCount = 0;
+        const commandFilesByName = new Map();
+        let loadFailed = false;
         const commandsPath = path.join(__dirname, 'commands');
+        const onlyGuildConfigPath = path.join(__dirname, '../config/onlyguild.json');
+        const onlyGuildCommands = loadOnlyGuildCommands(onlyGuildConfigPath);
         // 🔹 Cerca tutti i file dei comandi.
         const commandFiles = getAllFiles(commandsPath);
         const registerSingleCommand = (cmd, filePath) => {
             const fileName = path.basename(filePath);
-            if ('data' in cmd && 'execute' in cmd) {
+            if (cmd.data && cmd.execute) {
+                const commandName = cmd.data.name;
+                const commandFiles = commandFilesByName.get(commandName) ?? [];
+                commandFiles.push(filePath);
+                commandFilesByName.set(commandName, commandFiles);
+                if (commandFiles.length > 1) {
+                    console.error(`Comando slash duplicato: /${commandName} definito in: ${commandFiles.join(', ')}`);
+                    loadFailed = true;
+                    return;
+                }
                 commandsPayload.push(cmd.data.toJSON());
-                slashCount++;
-                const nameFormatted = `/${cmd.data.name}`.padEnd(23, ' ');
-                console.log(`${style.cyan}│${style.reset}  ${style.green}✓ Slash${style.reset}  ┆ ${nameFormatted} ${style.gray}[Caricato]${style.reset} ${style.cyan}│${style.reset}`);
+                const nameFormatted = `/${commandName}`.padEnd(23, ' ');
+                const isOnlyGuild = onlyGuildCommands.has(commandName);
+                const scope = isOnlyGuild ? 'Guild' : 'Global';
+                const status = isOnlyGuild ? '[GUILD_ID]' : '[Caricato]';
+                console.log(`${style.cyan}│${style.reset}  ${style.green}✓ ${scope}${style.reset}  ┆ ${nameFormatted} ${style.gray}${status}${style.reset} ${style.cyan}│${style.reset}`);
+                const subcommandNames = getSubcommandNames(cmd.data);
+                if (subcommandNames.length > 0) {
+                    console.log(`${style.cyan}│${style.reset}     ${style.gray}↳ Sottocomandi: ${subcommandNames.join(', ')}${style.reset}                              ${style.cyan}│${style.reset}`);
+                }
             }
             else {
+                loadFailed = true;
                 const nameFormatted = `/${fileName}`.padEnd(23, ' ');
                 console.log(`${style.cyan}│${style.reset}  ${style.yellow}⚠ Slash${style.reset}  ┆ ${nameFormatted} ${style.yellow}[Incompleto]${style.reset} ${style.cyan}│${style.reset}`);
             }
         };
         for (const filePath of commandFiles) {
             try {
-                const commandModule = require(filePath);
-                if (Array.isArray(commandModule)) {
-                    for (const cmd of commandModule) {
+                const commandModules = getCommandModules(require(filePath));
+                if (commandModules.length === 0) {
+                    registerSingleCommand({}, filePath);
+                }
+                else {
+                    for (const cmd of commandModules) {
                         registerSingleCommand(cmd, filePath);
                     }
                 }
-                else {
-                    registerSingleCommand(commandModule, filePath);
-                }
             }
             catch (err) {
+                loadFailed = true;
                 const fileName = path.basename(filePath);
                 const nameFormatted = `/${fileName}`.padEnd(23, ' ');
                 console.log(`${style.cyan}│${style.reset}  ${style.red}✗ Slash${style.reset}  ┆ ${nameFormatted} ${style.red}[Errore]${style.reset}     ${style.cyan}│${style.reset}`);
             }
         }
-        const ticketGuildId = (0, ticketScope_1.getTicketGuildId)();
-        const globalCommands = commandsPayload.filter((cmd) => !ticketScope_1.ticketCommandNames.has(cmd.name));
-        const ticketCommands = commandsPayload.filter((cmd) => ticketScope_1.ticketCommandNames.has(cmd.name));
+        if (loadFailed) {
+            throw new Error('Il caricamento dei comandi è fallito: nessun comando online è stato modificato.');
+        }
+        const loadedCommandNames = new Set(commandsPayload.map((cmd) => cmd.name));
+        for (const commandName of onlyGuildCommands) {
+            if (!loadedCommandNames.has(commandName)) {
+                console.warn(`Il comando esclusivo "${commandName}" è configurato in onlyguild.json ma non è stato trovato tra i comandi caricati.`);
+            }
+        }
+        const globalCommands = commandsPayload.filter((cmd) => !onlyGuildCommands.has(cmd.name));
+        const onlyGuildPayload = commandsPayload.filter((cmd) => onlyGuildCommands.has(cmd.name));
+        const guildId = process.env.GUILD_ID?.trim();
         // Registra comandi globali
         const globalData = (await rest.put(discord_js_1.Routes.applicationCommands(clientId), { body: globalCommands }));
-        // Registra comandi di ticket a livello di guild (se configurato)
-        if (ticketGuildId && ticketCommands.length > 0) {
-            const deployedTicketCommands = await rest.put(discord_js_1.Routes.applicationGuildCommands(clientId, ticketGuildId), { body: ticketCommands });
-            console.log(`Comandi ticket pubblicati nella guild configurata: ${deployedTicketCommands.length}.`);
+        let deployedOnlyGuildCount = 0;
+        if (onlyGuildPayload.length > 0 && guildId) {
+            const deployedOnlyGuildCommands = await rest.put(discord_js_1.Routes.applicationGuildCommands(clientId, guildId), { body: onlyGuildPayload });
+            deployedOnlyGuildCount = deployedOnlyGuildCommands.length;
+            console.log(`Comandi esclusivi pubblicati nella guild ${guildId}: ${deployedOnlyGuildCount}.`);
         }
-        else if (!ticketGuildId) {
-            console.warn('TICKET_GUILD_ID non configurato: i comandi ticket non verranno pubblicati.');
+        else if (onlyGuildPayload.length > 0) {
+            console.warn('GUILD_ID non configurato: i comandi esclusivi non verranno pubblicati e non saranno registrati globalmente.');
         }
         console.log(`${style.cyan}├─────────────────────────────────────────────────────────────┤${style.reset}`);
-        console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} ${style.green}${globalData.length}${style.reset} Comandi globali + ${style.green}${ticketCommands.length}${style.reset} Comandi ticket${style.reset}    ${style.cyan}│${style.reset}`);
+        const guildSummary = guildId || 'GUILD_ID non configurato';
+        console.log(`${style.cyan}│${style.reset}  ${style.bold}Riepilogo API:${style.reset} Comandi globali: ${style.green}${globalData.length}${style.reset}    ${style.cyan}│${style.reset}`);
+        console.log(`${style.cyan}│${style.reset}  Comandi esclusivi ${guildSummary}: ${style.green}${deployedOnlyGuildCount}${style.reset}                 ${style.cyan}│${style.reset}`);
         console.log(`${style.cyan}╰─────────────────────────────────────────────────────────────╯${style.reset}\n`);
     }
     catch (error) {
@@ -135,5 +215,6 @@ async function deployCommands() {
         console.log(`${style.cyan}│${style.reset}  ${style.red}✗ Si è verificato un errore critico durante il deploy API.${style.reset}   ${style.cyan}│${style.reset}`);
         console.log(`${style.cyan}╰─────────────────────────────────────────────────────────────╯${style.reset}\n`);
         console.error(error);
+        throw error;
     }
 }

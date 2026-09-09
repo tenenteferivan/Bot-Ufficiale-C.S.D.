@@ -25,6 +25,12 @@ async function execute(interaction) {
         await interaction.reply({ content: '❌ Il canale deve essere un canale testuale del server.', flags: discord_js_1.MessageFlags.Ephemeral });
         return;
     }
+    const textChannel = channel;
+    const botPermissions = textChannel.permissionsFor(interaction.client.user);
+    if (!botPermissions?.has([discord_js_1.PermissionFlagsBits.ViewChannel, discord_js_1.PermissionFlagsBits.SendMessages])) {
+        await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: discord_js_1.MessageFlags.Ephemeral });
+        return;
+    }
     const panel = new discord_js_1.EmbedBuilder()
         .setColor(0x2b2d31)
         .setTitle('🎫 Supporto C.S.D.')

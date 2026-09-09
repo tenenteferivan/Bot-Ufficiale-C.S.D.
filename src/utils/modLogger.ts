@@ -1,11 +1,14 @@
 import { ChatInputCommandInteraction, EmbedBuilder, User } from 'discord.js';
+import { sendUserNotification } from './userNotification';
 
 const notifiedInteractions = new WeakSet<ChatInputCommandInteraction>();
+const dmEligibleCommands = new Set(['ban', 'kick', 'timeout', 'warn']);
 
 export async function sendModNotification(interaction: ChatInputCommandInteraction): Promise<boolean> {
   if (!interaction.guild) return false;
 
   const subcommand = interaction.options.getSubcommand(false);
+  if (!dmEligibleCommands.has(interaction.commandName.toLowerCase())) return false;
   if (interaction.commandName === 'warn' && subcommand === 'remove') return false;
   if (notifiedInteractions.has(interaction)) return false;
   notifiedInteractions.add(interaction);
@@ -75,21 +78,5 @@ export async function sendModNotification(interaction: ChatInputCommandInteracti
     embed.addFields({ name: '🆔 ID Avvertimento', value: warnId, inline: true });
   }
 
-  if (targetUser) {
-    try {
-      await targetUser.send({ embeds: [embed] });
-      return true;
-    } catch (error: any) {
-      if (error.code === 50007) {
-        console.warn(`[ModNotice] DMs chiusi per l'utente ${targetUser.tag}.`);
-      } else if (error.code === 50278) {
-        console.warn(`[ModNotice] Impossibile inviare DM a ${targetUser.tag}: nessun server in comune.`);
-      } else {
-        console.error(`[ModNotice] Errore invio DM a ${targetUser.tag}:`, error);
-      }
-      return false;
-    }
-  }
-
-  return false;
+  return targetUser ? sendUserNotification(targetUser, embed) : false;
 }

@@ -182,7 +182,7 @@ export async function getUserRecord(
         .join('\n')
     : '';
 
-  const record = await new Promise<UserRecord>((resolve) => {
+  const record = await new Promise<UserRecord>((resolve, reject) => {
     db.get(
       `
       SELECT *
@@ -191,7 +191,12 @@ export async function getUserRecord(
       `,
       [userId],
       (err, row: any) => {
-        if (err || !row) {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        if (!row) {
           resolve({
             userId,
             points: 20.0,
@@ -304,47 +309,125 @@ export async function removePoints(
   amount: number,
   reason: string
 ): Promise<number> {
-  const current = await getUserRecord(userId);
-
-  const newPoints = Math.max(
-    0,
-    Math.round((current.points - amount) * 10) / 10
-  );
-
-  await updateUserPoints(userId, newPoints);
-
-  const createdAt = new Date().toISOString();
-
-  await new Promise<void>((resolve, reject) => {
-    db.run(
-      `
-      INSERT INTO user_sanctions (
-        user_id,
-        type,
-        reason,
-        points_removed,
-        created_at
-      )
-      VALUES (?, 'POINTS_REMOVAL', ?, ?, ?)
-      `,
-      [
-        userId,
-        reason,
-        amount,
-        createdAt,
-      ],
-      (err) => {
-        if (err) {
-          reject(err);
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run('BEGIN IMMEDIATE', (beginError) => {
+        if (beginError) {
+          reject(beginError);
           return;
         }
 
-        resolve();
-      }
-    );
-  });
+        const rollback = (error: Error): void => {
+          db.run('ROLLBACK', () => reject(error));
+        };
 
-  return newPoints;
+        db.run(
+          `INSERT OR IGNORE INTO user_records (user_id, points, max_points)
+           VALUES (?, 20.0, 20.0)`,
+          [userId],
+          (insertError) => {
+            if (insertError) {
+              rollback(insertError);
+              return;
+            }
+
+            db.run(
+              `UPDATE user_records
+               SET points = MAX(0, ROUND(points - ?, 1))
+               WHERE user_id = ?`,
+              [amount, userId],
+              (updateError) => {
+                if (updateError) {
+                  rollback(updateError);
+                  return;
+                }
+
+                db.run(
+                  `INSERT INTO user_sanctions (user_id, type, reason, points_removed, created_at)
+                   VALUES (?, 'POINTS_REMOVAL', ?, ?, ?)`,
+                  [userId, reason, amount, new Date().toISOString()],
+                  (sanctionError) => {
+                    if (sanctionError) {
+                      rollback(sanctionError);
+                      return;
+                    }
+
+                    db.get<{ points: number }>(
+                      'SELECT points FROM user_records WHERE user_id = ?',
+                      [userId],
+                      (selectError, row) => {
+                        if (selectError || !row) {
+                          rollback(selectError ?? new Error('Punti utente non disponibili dopo l\'aggiornamento.'));
+                          return;
+                        }
+
+                        db.run('COMMIT', (commitError) => {
+                          if (commitError) {
+                            rollback(commitError);
+                            return;
+                          }
+                          resolve(row.points);
+                        });
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      });
+    });
+  });
+}
+
+export function resetUserRecord(userId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run('BEGIN IMMEDIATE', (beginError) => {
+        if (beginError) {
+          reject(beginError);
+          return;
+        }
+
+        const rollback = (error: Error): void => {
+          db.run('ROLLBACK', () => reject(error));
+        };
+        const statements = [
+          ['DELETE FROM user_sanctions WHERE user_id = ?', [userId]],
+          ['DELETE FROM user_reports WHERE user_id = ?', [userId]],
+          ['DELETE FROM user_notes WHERE user_id = ?', [userId]],
+          [`UPDATE user_records
+            SET points = 20.0, max_points = 20.0, sanctions_history = '', notes = '', reports = '', status = ''
+            WHERE user_id = ?`, [userId]],
+        ] as const;
+
+        const runNext = (index: number): void => {
+          if (index === statements.length) {
+            db.run('COMMIT', (commitError) => {
+              if (commitError) {
+                rollback(commitError);
+                return;
+              }
+              resolve();
+            });
+            return;
+          }
+
+          const [sql, params] = statements[index];
+          db.run(sql, params, (error) => {
+            if (error) {
+              rollback(error);
+              return;
+            }
+            runNext(index + 1);
+          });
+        };
+
+        runNext(0);
+      });
+    });
+  });
 }
 
 export async function addPoints(

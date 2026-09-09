@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.name = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
+const userNotification_1 = require("../../utils/userNotification");
 exports.name = 'warn';
 async function execute(message, args) {
     if (!message.member?.permissions.has(discord_js_1.PermissionFlagsBits.ModerateMembers)) {
@@ -15,7 +16,11 @@ async function execute(message, args) {
         await message.reply('Sintassi: !warn @utente <motivo>');
         return;
     }
-    const embed = new discord_js_1.EmbedBuilder().setColor(0xFEE75C).setTitle('Avvertimento').setDescription(`Motivo: ${reason}`).setTimestamp();
+    const embed = new discord_js_1.EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle('⚠️ Hai ricevuto un avvertimento')
+        .setDescription(`Motivo: ${reason}`)
+        .setTimestamp();
     await message.reply(`Avvertimento inviato a ${target}.`);
-    await target.send({ embeds: [embed] }).catch(() => undefined);
+    await (0, userNotification_1.sendUserNotification)(target, embed);
 }

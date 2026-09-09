@@ -1,5 +1,6 @@
 import {
   ChatInputCommandInteraction,
+  EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -10,6 +11,7 @@ import {
   setRestriction,
   UserRestriction,
 } from '../utils/restrictionManager';
+import { sendUserNotification } from '../utils/userNotification';
 
 export const data =
   new SlashCommandBuilder()
@@ -263,6 +265,20 @@ export async function execute(
 
     setRestriction(
       restriction
+    );
+
+    await sendUserNotification(
+      user,
+      new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('🚫 Restrizione applicata')
+        .setDescription('È stata applicata una restrizione al tuo account.')
+        .addFields(
+          { name: 'Motivo', value: motivo },
+          { name: 'Durata', value: durata, inline: true },
+          { name: 'Operatore', value: interaction.user.tag, inline: true },
+        )
+        .setTimestamp(),
     );
 
   } catch (error) {

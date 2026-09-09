@@ -4,7 +4,6 @@ exports.data = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const userRecord_1 = require("../utils/userRecord");
-const databasehandler_1 = require("../handlers/databasehandler");
 // Creazione comando
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('resetta-registro')
@@ -72,52 +71,7 @@ async function execute(interaction) {
          *
          * per questo user_id.
          */
-        // 1. Elimina tutte le sanzioni dell'utente
-        await new Promise((resolve, reject) => {
-            databasehandler_1.db.run(`
-        DELETE FROM user_sanctions
-        WHERE user_id = ?
-        `, [targetUser.id], (error) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-                resolve();
-            });
-        });
-        // 2. Resetta completamente il registro principale dell'utente
-        await new Promise((resolve, reject) => {
-            databasehandler_1.db.run(`
-        UPDATE user_records
-        SET
-          points = 20.0,
-          max_points = 20.0,
-          sanctions_history = '',
-          notes = '',
-          reports = '',
-          status = ''
-        WHERE user_id = ?
-        `, [targetUser.id], (error) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-                resolve();
-            });
-        });
-        // 3. Elimina tutte le note dell'utente
-        await new Promise((resolve, reject) => {
-            databasehandler_1.db.run(`
-        DELETE FROM user_notes
-        WHERE user_id = ?
-        `, [targetUser.id], (error) => {
-                if (error) {
-                    reject(error);
-                    return;
-                }
-                resolve();
-            });
-        });
+        await (0, userRecord_1.resetUserRecord)(targetUser.id);
         // Crea il messaggio di conferma
         const embed = new discord_js_1.EmbedBuilder()
             .setColor(0x57F287)

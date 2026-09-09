@@ -12,14 +12,13 @@ import {
 
 import {
   handleAntiLink,
-} from './utils/antilinkHandler';
+} from './utils/antilinkHandler'
 
 import dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
 import { deployCommands } from './deploycommands';
-import { sendModNotification } from './utils/modLogger';
 
 import {
   handleTicketInteraction,
@@ -271,6 +270,10 @@ function loadSlashCommands(): void {
       'execute' in command
     ) {
 
+      if (client.commands.has(command.data.name)) {
+        throw new Error(`Comando slash duplicato nel caricamento runtime: ${command.data.name}`);
+      }
+
       client.commands.set(
         command.data.name,
         command
@@ -377,7 +380,12 @@ client.once(
      * ========================================================
      */
 
-    await deployCommands();
+    try {
+      await deployCommands();
+    } catch (error) {
+      console.error('Deploy dei comandi annullato: nessun comando online è stato modificato.', error);
+      return;
+    }
 
 
     /*
@@ -386,8 +394,13 @@ client.once(
      * ========================================================
      */
 
-    loadSlashCommands();
-    loadPrefixCommands();
+    try {
+      loadSlashCommands();
+      loadPrefixCommands();
+    } catch (error) {
+      console.error('Caricamento dei comandi annullato per un conflitto o un errore di importazione:', error);
+      return;
+    }
 
 
     /*
@@ -439,6 +452,8 @@ client.once(
 client.on(
   'interactionCreate',
   async (interaction: Interaction) => {
+
+    try {
 
     // --------------------------------------------------------
     // Partnership
@@ -878,11 +893,6 @@ client.on(
       );
 
 
-      await sendModNotification(
-        interaction
-      );
-
-
       if (
         interaction.guild
       ) {
@@ -938,6 +948,9 @@ client.on(
           );
       }
     }
+    } catch (error) {
+      console.error('Errore non gestito durante la gestione dell\'interazione:', error);
+    }
   }
 );
 
@@ -982,6 +995,7 @@ client.on(
     ) {
       return;
     }
+
 
 
     const args =
@@ -1065,7 +1079,9 @@ client.on(
     logMessageDelete(
       client,
       message
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della cancellazione del messaggio:', error);
+    })
 );
 
 
@@ -1120,7 +1136,9 @@ client.on(
     logMemberLeave(
       client,
       member
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log dell\'uscita dal server:', error);
+    })
 );
 
 
@@ -1132,7 +1150,9 @@ client.on(
       ban.guild,
       ban.user,
       true
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log del ban:', error);
+    })
 );
 
 
@@ -1144,7 +1164,9 @@ client.on(
       ban.guild,
       ban.user,
       false
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della rimozione del ban:', error);
+    })
 );
 
 
@@ -1155,7 +1177,9 @@ client.on(
       client,
       oldMember,
       newMember
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della modifica del membro:', error);
+    })
 );
 
 
@@ -1165,7 +1189,9 @@ client.on(
     logRoleCreate(
       client,
       role
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della creazione del ruolo:', error);
+    })
 );
 
 
@@ -1175,7 +1201,9 @@ client.on(
     logRoleDelete(
       client,
       role
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log dell\'eliminazione del ruolo:', error);
+    })
 );
 
 
@@ -1186,7 +1214,9 @@ client.on(
       client,
       oldRole,
       newRole
-    )
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della modifica del ruolo:', error);
+    })
 );
 
 
@@ -1203,7 +1233,9 @@ client.on(
     logChannelCreate(
       client,
       channel
-    );
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della creazione del canale:', error);
+    });
   }
 );
 
@@ -1221,7 +1253,9 @@ client.on(
     logChannelDelete(
       client,
       channel
-    );
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log dell\'eliminazione del canale:', error);
+    });
   }
 );
 
@@ -1241,7 +1275,9 @@ client.on(
       client,
       oldChannel,
       newChannel
-    );
+    ).catch((error) => {
+      console.error('[SERVER LOG] Errore durante il log della modifica del canale:', error);
+    });
   }
 );
 

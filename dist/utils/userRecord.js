@@ -7,6 +7,7 @@ exports.getUserSanctions = getUserSanctions;
 exports.getUserRecord = getUserRecord;
 exports.updateUserPoints = updateUserPoints;
 exports.removePoints = removePoints;
+exports.resetUserRecord = resetUserRecord;
 exports.addPoints = addPoints;
 exports.addNote = addNote;
 exports.addUserReport = addUserReport;
@@ -119,13 +120,17 @@ async function getUserRecord(userId) {
             .map((n) => `• [${formatDate(n.created_at)}] ${n.note}`)
             .join('\n')
         : '';
-    const record = await new Promise((resolve) => {
+    const record = await new Promise((resolve, reject) => {
         databasehandler_1.db.get(`
       SELECT *
       FROM user_records
       WHERE user_id = ?
       `, [userId], (err, row) => {
-            if (err || !row) {
+            if (err) {
+                reject(err);
+                return;
+            }
+            if (!row) {
                 resolve({
                     userId,
                     points: 20.0,
@@ -208,34 +213,98 @@ function updateUserPoints(userId, newPoints) {
     });
 }
 async function removePoints(userId, amount, reason) {
-    const current = await getUserRecord(userId);
-    const newPoints = Math.max(0, Math.round((current.points - amount) * 10) / 10);
-    await updateUserPoints(userId, newPoints);
-    const createdAt = new Date().toISOString();
-    await new Promise((resolve, reject) => {
-        databasehandler_1.db.run(`
-      INSERT INTO user_sanctions (
-        user_id,
-        type,
-        reason,
-        points_removed,
-        created_at
-      )
-      VALUES (?, 'POINTS_REMOVAL', ?, ?, ?)
-      `, [
-            userId,
-            reason,
-            amount,
-            createdAt,
-        ], (err) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            resolve();
+    return new Promise((resolve, reject) => {
+        databasehandler_1.db.serialize(() => {
+            databasehandler_1.db.run('BEGIN IMMEDIATE', (beginError) => {
+                if (beginError) {
+                    reject(beginError);
+                    return;
+                }
+                const rollback = (error) => {
+                    databasehandler_1.db.run('ROLLBACK', () => reject(error));
+                };
+                databasehandler_1.db.run(`INSERT OR IGNORE INTO user_records (user_id, points, max_points)
+           VALUES (?, 20.0, 20.0)`, [userId], (insertError) => {
+                    if (insertError) {
+                        rollback(insertError);
+                        return;
+                    }
+                    databasehandler_1.db.run(`UPDATE user_records
+               SET points = MAX(0, ROUND(points - ?, 1))
+               WHERE user_id = ?`, [amount, userId], (updateError) => {
+                        if (updateError) {
+                            rollback(updateError);
+                            return;
+                        }
+                        databasehandler_1.db.run(`INSERT INTO user_sanctions (user_id, type, reason, points_removed, created_at)
+                   VALUES (?, 'POINTS_REMOVAL', ?, ?, ?)`, [userId, reason, amount, new Date().toISOString()], (sanctionError) => {
+                            if (sanctionError) {
+                                rollback(sanctionError);
+                                return;
+                            }
+                            databasehandler_1.db.get('SELECT points FROM user_records WHERE user_id = ?', [userId], (selectError, row) => {
+                                if (selectError || !row) {
+                                    rollback(selectError ?? new Error('Punti utente non disponibili dopo l\'aggiornamento.'));
+                                    return;
+                                }
+                                databasehandler_1.db.run('COMMIT', (commitError) => {
+                                    if (commitError) {
+                                        rollback(commitError);
+                                        return;
+                                    }
+                                    resolve(row.points);
+                                });
+                            });
+                        });
+                    });
+                });
+            });
         });
     });
-    return newPoints;
+}
+function resetUserRecord(userId) {
+    return new Promise((resolve, reject) => {
+        databasehandler_1.db.serialize(() => {
+            databasehandler_1.db.run('BEGIN IMMEDIATE', (beginError) => {
+                if (beginError) {
+                    reject(beginError);
+                    return;
+                }
+                const rollback = (error) => {
+                    databasehandler_1.db.run('ROLLBACK', () => reject(error));
+                };
+                const statements = [
+                    ['DELETE FROM user_sanctions WHERE user_id = ?', [userId]],
+                    ['DELETE FROM user_reports WHERE user_id = ?', [userId]],
+                    ['DELETE FROM user_notes WHERE user_id = ?', [userId]],
+                    [`UPDATE user_records
+            SET points = 20.0, max_points = 20.0, sanctions_history = '', notes = '', reports = '', status = ''
+            WHERE user_id = ?`, [userId]],
+                ];
+                const runNext = (index) => {
+                    if (index === statements.length) {
+                        databasehandler_1.db.run('COMMIT', (commitError) => {
+                            if (commitError) {
+                                rollback(commitError);
+                                return;
+                            }
+                            resolve();
+                        });
+                        return;
+                    }
+                    const [sql, params] = statements[index];
+                    databasehandler_1.db.run(sql, params, (error) => {
+                        if (error) {
+                            rollback(error);
+                            return;
+                        }
+                        runNext(index + 1);
+                    });
+                };
+                runNext(0);
+            });
+        });
+    });
 }
 async function addPoints(userId, amount) {
     const current = await getUserRecord(userId);

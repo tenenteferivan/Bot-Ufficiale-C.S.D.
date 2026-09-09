@@ -1,5 +1,6 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { parseDuration } from '../../utils/timeParser';
+import { sendUserNotification } from '../../utils/userNotification';
 
 export const name = 'timeout';
 export const aliases = ['to'];
@@ -41,6 +42,7 @@ export async function execute(message: Message, args: string[]): Promise<void> {
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
+    await sendUserNotification(target.user, embed);
   } catch (err) {
     await message.reply('❌ **Si è verificato un errore durante l\'applicazione del timeout.**');
   }

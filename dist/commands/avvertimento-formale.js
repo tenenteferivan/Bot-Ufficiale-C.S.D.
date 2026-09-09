@@ -4,6 +4,7 @@ exports.data = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const userRecord_1 = require("../utils/userRecord");
+const userNotification_1 = require("../utils/userNotification");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('avvertimento-formale')
     .setDescription('Emette un avvertimento formale a un utente (Solo OPERATOR).')
@@ -106,6 +107,7 @@ async function execute(interaction) {
             text: 'Registro Sanzioni C.S.D. • Scadenza Automatica',
         })
             .setTimestamp();
+        await (0, userNotification_1.sendUserNotification)(targetUser, embed);
         await interaction.reply({
             embeds: [embed],
         });

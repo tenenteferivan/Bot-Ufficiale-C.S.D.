@@ -50,9 +50,11 @@ export function loadRestrictions(): RestrictionsData {
   ensureDataDirectory();
 
   if (!fs.existsSync(RESTRICTIONS_FILE)) {
-    return {
+    const emptyData = {
       restrictions: [],
     };
+    saveRestrictions(emptyData);
+    return emptyData;
   }
 
   try {
@@ -72,20 +74,18 @@ export function loadRestrictions(): RestrictionsData {
       );
     }
 
-    return {
-      restrictions: data.restrictions.filter(
-        (restriction: unknown): restriction is UserRestriction => {
+    const restrictions = data.restrictions.map((restriction: unknown): UserRestriction => {
           if (
             !restriction ||
             typeof restriction !== 'object'
           ) {
-            return false;
+            throw new Error('Una restrizione non è valida.');
           }
 
           const record =
             restriction as Record<string, unknown>;
 
-          return (
+          if (!(
             typeof record.userId === 'string' &&
             /^\d{17,20}$/.test(record.userId) &&
             typeof record.userTag === 'string' &&
@@ -97,10 +97,13 @@ export function loadRestrictions(): RestrictionsData {
             typeof record.operatorTag === 'string' &&
             typeof record.createdAt === 'number' &&
             Number.isFinite(record.createdAt)
-          );
-        }
-      ),
-    };
+          )) {
+            throw new Error('Una restrizione non è valida.');
+          }
+          return record as unknown as UserRestriction;
+        });
+
+    return { restrictions };
   } catch (error) {
     console.error(
       '[RESTRICTION] Impossibile leggere restrictions.json:',

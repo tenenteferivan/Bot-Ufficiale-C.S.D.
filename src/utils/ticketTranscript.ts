@@ -116,8 +116,8 @@ export async function sendTicketTranscript(channel: TextChannel, ticket: TicketR
     await writeFile(filePath, html, 'utf8');
     const attachmentName = path.basename(filePath);
     const dmAttachment = new AttachmentBuilder(filePath, { name: attachmentName });
-    await closer.send({ content: `📁 Il transcript del ticket **#${String(ticket.ticketNumber).padStart(4, '0')}** è allegato a questo messaggio.`, files: [dmAttachment] }).catch((error) => {
-      console.error('Impossibile inviare il transcript in DM:', error);
+    await channel.send({ content: `📁 Transcript del ticket **#${String(ticket.ticketNumber).padStart(4, '0')}** generato per ${closer}.`, files: [dmAttachment] }).catch((error) => {
+      console.error('Impossibile pubblicare il transcript nel ticket:', error);
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });

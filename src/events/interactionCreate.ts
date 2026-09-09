@@ -6,7 +6,6 @@ import {
   MessageFlags,
 } from 'discord.js';
 
-import { sendModNotification } from '../utils/modLogger';
 import { SlashCommand } from '../index';
 
 import { addUserReport } from '../utils/userRecord';
@@ -14,6 +13,8 @@ import {
   getReportConfigs,
   getSanctionConfigs,
 } from '../handlers/databasehandler';
+import { sendUserNotification } from '../utils/userNotification';
+import { sendWithRateLimitRetry } from '../utils/announcementDistributor';
 
 export default {
   name: Events.InteractionCreate,
@@ -172,6 +173,16 @@ export default {
             })
             .setTimestamp();
 
+          const reportedUser = await interaction.client.users.fetch(userId).catch(() => null);
+          if (reportedUser) {
+            await sendUserNotification(
+              reportedUser,
+              new EmbedBuilder(embed.toJSON())
+                .setTitle(`🚨 Hai ricevuto una segnalazione #${reportId}`)
+                .setDescription('È stata registrata una segnalazione relativa al tuo account.'),
+            );
+          }
+
 
           // ------------------------------------------------------
           // Recupera configurazioni
@@ -225,7 +236,7 @@ export default {
               }
 
 
-              await channel.send({
+              await sendWithRateLimitRetry(channel, {
                 embeds: [embed],
               });
 
@@ -507,7 +518,7 @@ export default {
 
 
               // Invia sanzione
-              await channel.send({
+              await sendWithRateLimitRetry(channel, {
                 embeds: [embed],
               });
 
@@ -623,9 +634,6 @@ export default {
 
       // Esegue il comando
       await command.execute(interaction);
-
-      // Notifica privata/moderazione
-      await sendModNotification(interaction);
 
     } catch (error) {
 

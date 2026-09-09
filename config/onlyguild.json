@@ -1,0 +1,11 @@
+{
+  "commands": [
+    "aggiungi-operatore",
+    "aggiungi-dirigenza",
+    "setup-ticket",
+    "rinomina",
+    "registra-sanzione-utente",
+    "reclama",
+    "chiudi"
+  ]
+}

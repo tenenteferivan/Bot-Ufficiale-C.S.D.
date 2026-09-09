@@ -104,6 +104,15 @@ export async function reserveTicketNumber(guildId: string): Promise<number> {
   });
 }
 
+export async function releaseTicketNumber(guildId: string, reservedNumber: number): Promise<void> {
+  await run(
+    `UPDATE ticket_configs
+     SET next_number = next_number - 1
+     WHERE guild_id = ? AND next_number = ?`,
+    [guildId, reservedNumber + 1],
+  );
+}
+
 export async function createTicketRecord(
   channelId: string,
   guildId: string,
@@ -138,6 +147,10 @@ export async function getTicket(channelId: string): Promise<TicketRecord | null>
 
 export function closeTicketRecord(channelId: string): Promise<void> {
   return run('UPDATE tickets SET status = \'closed\' WHERE channel_id = ?', [channelId]);
+}
+
+export function deleteTicketRecord(channelId: string): Promise<void> {
+  return run('DELETE FROM tickets WHERE channel_id = ?', [channelId]);
 }
 
 export async function listOpenTickets(guildId: string): Promise<TicketRecord[]> {
@@ -202,12 +215,49 @@ export async function applyClaim(channel: any, ticket: TicketRecord, config: Tic
   });
   if (!claimed) return false;
 
+  const overwriteIds = [config.staffRoleId, ticket.openerId, member.id];
+  const previousOverwrites = new Map<string, { allow: string[]; deny: string[] } | null>();
+  for (const id of overwriteIds) {
+    const overwrite = channel.permissionOverwrites.cache.get(id);
+    previousOverwrites.set(id, overwrite ? {
+      allow: overwrite.allow.toArray(),
+      deny: overwrite.deny.toArray(),
+    } : null);
+  }
+
+  const restoreOverwrites = async (): Promise<void> => {
+    const previousValue = (previous: { allow: string[]; deny: string[] }, permission: string): true | false | null => {
+      if (previous.allow.includes(permission)) return true;
+      if (previous.deny.includes(permission)) return false;
+      return null;
+    };
+
+    for (const id of overwriteIds) {
+      const previous = previousOverwrites.get(id);
+      if (!previous) {
+        await channel.permissionOverwrites.delete(id);
+      } else {
+        await channel.permissionOverwrites.edit(id, {
+          ViewChannel: previousValue(previous, 'ViewChannel'),
+          SendMessages: previousValue(previous, 'SendMessages'),
+          AttachFiles: previousValue(previous, 'AttachFiles'),
+          ReadMessageHistory: previousValue(previous, 'ReadMessageHistory'),
+        });
+      }
+    }
+  };
+
   try {
     await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
     await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
     await channel.permissionOverwrites.edit(member.id, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
     return true;
   } catch (error) {
+    try {
+      await restoreOverwrites();
+    } catch (restoreError) {
+      console.error('Impossibile ripristinare completamente i permessi del ticket:', restoreError);
+    }
     await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND claimed_by = ?", [ticket.channelId, member.id]);
     throw error;
   }

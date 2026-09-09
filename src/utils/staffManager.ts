@@ -45,13 +45,32 @@ function loadStaff(): StaffData {
     ).trim();
 
   if (!raw) {
-    return {
+    const emptyData = {
       operatori: [],
       dirigenza: [],
     };
+    saveStaff(emptyData);
+    return emptyData;
   }
 
-  return JSON.parse(raw) as StaffData;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    console.error('[STAFF] JSON corrotto in staff.json:', error);
+    throw new Error('Il file staff.json contiene JSON non valido.');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+    !('operatori' in parsed) || !('dirigenza' in parsed) ||
+    !Array.isArray(parsed.operatori) || !Array.isArray(parsed.dirigenza) ||
+    !parsed.operatori.every((id: unknown) => typeof id === 'string') ||
+    !parsed.dirigenza.every((id: unknown) => typeof id === 'string')) {
+    console.error('[STAFF] Struttura non valida in staff.json.');
+    throw new Error('La struttura di staff.json non è valida.');
+  }
+
+  return { operatori: [...parsed.operatori], dirigenza: [...parsed.dirigenza] };
 }
 
 function saveStaff(
@@ -59,11 +78,13 @@ function saveStaff(
 ): void {
   ensureDataDirectory();
 
+  const temporaryPath = `${FILE_PATH}.tmp`;
   fs.writeFileSync(
-    FILE_PATH,
+    temporaryPath,
     JSON.stringify(data, null, 2),
     'utf8'
   );
+  fs.renameSync(temporaryPath, FILE_PATH);
 }
 
 export function isOperatore(

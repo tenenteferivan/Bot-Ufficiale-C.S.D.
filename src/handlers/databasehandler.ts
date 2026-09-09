@@ -252,6 +252,33 @@ export function getLogConfig(
   });
 }
 
+export function getLogConfigs(): Promise<
+  { guildId: string; channelId: string }[]
+> {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `
+      SELECT guild_id, log_channel_id
+      FROM log_configs
+      `,
+      [],
+      (err, rows: any[]) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        resolve(
+          (rows || []).map((row) => ({
+            guildId: row.guild_id,
+            channelId: row.log_channel_id,
+          }))
+        );
+      }
+    );
+  });
+}
+
 // ============================================================
 // REPORT CONFIG
 // ============================================================

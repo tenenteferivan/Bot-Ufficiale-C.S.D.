@@ -4,6 +4,7 @@ exports.aliases = exports.name = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const timeParser_1 = require("../../utils/timeParser");
+const userNotification_1 = require("../../utils/userNotification");
 exports.name = 'timeout';
 exports.aliases = ['to'];
 async function execute(message, args) {
@@ -33,6 +34,7 @@ async function execute(message, args) {
             .setFooter({ text: `Eseguito da ${message.author.tag}`, iconURL: message.author.displayAvatarURL() })
             .setTimestamp();
         await message.reply({ embeds: [embed] });
+        await (0, userNotification_1.sendUserNotification)(target.user, embed);
     }
     catch (err) {
         await message.reply('❌ **Si è verificato un errore durante l\'applicazione del timeout.**');

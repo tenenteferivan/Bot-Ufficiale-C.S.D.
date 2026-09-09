@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { requireGuildPermission } from '../../utils/permissions';
+import { sendModNotification } from '../../utils/modLogger';
 
 export const data = new SlashCommandBuilder()
   .setName('kick')
@@ -32,6 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
+    await sendModNotification(interaction);
   } catch (error) {
     await interaction.reply({ content: '❌ **Impossibile espellere l\'utente.** Controlla la gerarchia dei ruoli.', flags: MessageFlags.Ephemeral });
   }

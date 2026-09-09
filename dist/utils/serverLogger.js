@@ -60,7 +60,9 @@ function formatUser(user) {
 function formatAuditExecutor(entry) {
     return entry?.executor ? formatUser(entry.executor) : 'Sconosciuto';
 }
-async function findRecentAuditEntry(guild, action, targetId) {
+async function findRecentAuditEntry(client, guild, action, targetId) {
+    if (!await getLogChannel(client, guild.id))
+        return null;
     const logs = await guild.fetchAuditLogs({ type: action, limit: 5 }).catch(() => null);
     if (!logs)
         return null;
@@ -113,7 +115,7 @@ async function logMemberLeave(client, member) {
     await sendServerLog(client, member.guild.id, 'Membro uscito', `${formatUser(member)} ha lasciato il server.`, 0xed4245, [{ name: 'Server', value: member.guild.name }]);
 }
 async function logBan(client, guild, user, added) {
-    const entry = await findRecentAuditEntry(guild, added ? discord_js_1.AuditLogEvent.MemberBanAdd : discord_js_1.AuditLogEvent.MemberBanRemove, user.id);
+    const entry = await findRecentAuditEntry(client, guild, added ? discord_js_1.AuditLogEvent.MemberBanAdd : discord_js_1.AuditLogEvent.MemberBanRemove, user.id);
     await sendServerLog(client, guild.id, added ? 'Membro bannato' : 'Ban rimosso', formatUser(user), added ? 0xed4245 : 0x57f287, [
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },
         { name: 'Motivo', value: entry?.reason ?? 'Nessun motivo specificato' },
@@ -123,6 +125,15 @@ async function logMemberUpdate(client, oldMember, newMember) {
     const changes = [];
     if (oldMember.nickname !== newMember.nickname)
         changes.push(`Nickname: ${oldMember.nickname ?? 'nessuno'} -> ${newMember.nickname ?? 'nessuno'}`);
+    if (oldMember.communicationDisabledUntilTimestamp !== newMember.communicationDisabledUntilTimestamp) {
+        const oldTimeout = oldMember.communicationDisabledUntilTimestamp
+            ? new Date(oldMember.communicationDisabledUntilTimestamp).toISOString()
+            : 'nessuno';
+        const newTimeout = newMember.communicationDisabledUntilTimestamp
+            ? new Date(newMember.communicationDisabledUntilTimestamp).toISOString()
+            : 'nessuno';
+        changes.push(`Timeout: ${oldTimeout} -> ${newTimeout}`);
+    }
     const oldRoles = new Set(oldMember.roles.cache.keys());
     const newRoles = new Set(newMember.roles.cache.keys());
     const addedRoles = [...newRoles].filter((id) => !oldRoles.has(id)).map((id) => newMember.guild.roles.cache.get(id)?.name ?? id);
@@ -133,7 +144,7 @@ async function logMemberUpdate(client, oldMember, newMember) {
         changes.push(`Ruoli rimossi: ${removedRoles.join(', ')}`);
     if (!changes.length)
         return;
-    const entry = await findRecentAuditEntry(newMember.guild, discord_js_1.AuditLogEvent.MemberRoleUpdate, newMember.id) ?? await findRecentAuditEntry(newMember.guild, discord_js_1.AuditLogEvent.MemberUpdate, newMember.id);
+    const entry = await findRecentAuditEntry(client, newMember.guild, discord_js_1.AuditLogEvent.MemberRoleUpdate, newMember.id) ?? await findRecentAuditEntry(client, newMember.guild, discord_js_1.AuditLogEvent.MemberUpdate, newMember.id);
     await sendServerLog(client, newMember.guild.id, 'Membro modificato', formatUser(newMember), 0xf1c40f, [
         { name: 'Modifiche', value: changes.join('\n') },
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },
@@ -149,35 +160,35 @@ async function logRoleUpdate(client, oldRole, newRole) {
         changes.push(`Permessi: ${rolePermissions(oldRole)} -> ${rolePermissions(newRole)}`);
     if (!changes.length)
         return;
-    const entry = await findRecentAuditEntry(newRole.guild, discord_js_1.AuditLogEvent.RoleUpdate, newRole.id);
+    const entry = await findRecentAuditEntry(client, newRole.guild, discord_js_1.AuditLogEvent.RoleUpdate, newRole.id);
     await sendServerLog(client, newRole.guild.id, 'Ruolo modificato', `Ruolo: **${newRole.name}** (${newRole.id})`, 0x9b59b6, [
         { name: 'Modifiche esplicite', value: changes.join('\n') },
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },
     ]);
 }
 async function logRoleCreate(client, role) {
-    const entry = await findRecentAuditEntry(role.guild, discord_js_1.AuditLogEvent.RoleCreate, role.id);
+    const entry = await findRecentAuditEntry(client, role.guild, discord_js_1.AuditLogEvent.RoleCreate, role.id);
     await sendServerLog(client, role.guild.id, 'Ruolo creato', `Ruolo: **${role.name}** (${role.id})`, 0x57f287, [
         { name: 'Permessi', value: rolePermissions(role) },
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },
     ]);
 }
 async function logRoleDelete(client, role) {
-    const entry = await findRecentAuditEntry(role.guild, discord_js_1.AuditLogEvent.RoleDelete, role.id);
+    const entry = await findRecentAuditEntry(client, role.guild, discord_js_1.AuditLogEvent.RoleDelete, role.id);
     await sendServerLog(client, role.guild.id, 'Ruolo eliminato', `Ruolo: **${role.name}** (${role.id})`, 0xed4245, [
         { name: 'Permessi precedenti', value: rolePermissions(role) },
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },
     ]);
 }
 async function logChannelCreate(client, channel) {
-    const entry = await findRecentAuditEntry(channel.guild, discord_js_1.AuditLogEvent.ChannelCreate, channel.id);
+    const entry = await findRecentAuditEntry(client, channel.guild, discord_js_1.AuditLogEvent.ChannelCreate, channel.id);
     await sendServerLog(client, channel.guild.id, 'Canale creato', `**${channel.name}** (${channel.id})`, 0x57f287, [
         { name: 'Tipo', value: channel.type.toString(), inline: true },
         { name: 'Eseguito da', value: formatAuditExecutor(entry), inline: true },
     ]);
 }
 async function logChannelDelete(client, channel) {
-    const entry = await findRecentAuditEntry(channel.guild, discord_js_1.AuditLogEvent.ChannelDelete, channel.id);
+    const entry = await findRecentAuditEntry(client, channel.guild, discord_js_1.AuditLogEvent.ChannelDelete, channel.id);
     await sendServerLog(client, channel.guild.id, 'Canale eliminato', `**${channel.name}** (${channel.id})`, 0xed4245, [{ name: 'Eseguito da', value: formatAuditExecutor(entry) }]);
 }
 async function logChannelUpdate(client, oldChannel, newChannel) {
@@ -189,7 +200,7 @@ async function logChannelUpdate(client, oldChannel, newChannel) {
     changes.push(...diffMap(channelOverwrites(oldChannel), channelOverwrites(newChannel)).map((change) => `Permessi canale: ${change}`));
     if (!changes.length)
         return;
-    const entry = await findRecentAuditEntry(newChannel.guild, discord_js_1.AuditLogEvent.ChannelUpdate, newChannel.id);
+    const entry = await findRecentAuditEntry(client, newChannel.guild, discord_js_1.AuditLogEvent.ChannelUpdate, newChannel.id);
     await sendServerLog(client, newChannel.guild.id, 'Canale modificato', `**${newChannel.name}** (${newChannel.id})`, 0xf1c40f, [
         { name: 'Modifiche esplicite', value: changes.join('\n') },
         { name: 'Eseguito da', value: formatAuditExecutor(entry) },

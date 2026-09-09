@@ -25,6 +25,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
+  const textChannel = channel as TextChannel;
+  const botPermissions = textChannel.permissionsFor(interaction.client.user);
+  if (!botPermissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])) {
+    await interaction.reply({ content: '❌ Il bot non può visualizzare o inviare messaggi nel canale selezionato.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
   const panel = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle('🎫 Supporto C.S.D.')

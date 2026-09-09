@@ -64,17 +64,16 @@ async function execute(interaction) {
     await interaction.deferReply({ flags: discord_js_1.MessageFlags.Ephemeral });
     try {
         await (0, archive_1.decryptFileStream)(fileName, tempFile);
-        await interaction.user.send({
+        await interaction.editReply({
             content: `📦 File richiesto dall'archivio: **${fileName}**`,
             files: [new discord_js_1.AttachmentBuilder(tempFile, { name: fileName })],
         });
         await (0, archive_1.notifyArchiveOwner)(interaction.client, 'Download', interaction.user.id, true, `File: ${fileName}`);
-        await interaction.editReply('✅ Il file è stato inviato tramite DM.');
     }
     catch (error) {
         const detail = error?.code === 'ENOENT'
             ? 'File non trovato.'
-            : 'Invio DM fallito oppure file non decifrabile.';
+            : 'File non decifrabile o non disponibile.';
         await (0, archive_1.notifyArchiveOwner)(interaction.client, 'Download', interaction.user.id, false, detail);
         await interaction.editReply(`❌ ${detail}`);
     }

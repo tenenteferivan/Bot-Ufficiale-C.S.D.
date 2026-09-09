@@ -1,4 +1,5 @@
 import { Message, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { sendUserNotification } from '../../utils/userNotification';
 
 export const name = 'kick';
 
@@ -31,6 +32,7 @@ export async function execute(message: Message, args: string[]): Promise<void> {
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
+    await sendUserNotification(target.user, embed);
   } catch (err) {
     await message.reply('❌ **Impossibile espellere l\'utente.** Controlla la gerarchia dei ruoli.');
   }

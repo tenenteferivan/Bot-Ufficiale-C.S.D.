@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import { requireGuildPermission } from '../../utils/permissions';
+import { sendModNotification } from '../../utils/modLogger';
 
 export const data = new SlashCommandBuilder()
   .setName('ban')
@@ -34,6 +35,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
+    await sendModNotification(interaction);
   } catch (error) {
     await interaction.reply({
       content: '❌ **Errore nell\'esecuzione del ban!** Verifica che il bot abbia i permessi necessari e che il ruoli dell\'utente siano inferiori a quelli del bot.',

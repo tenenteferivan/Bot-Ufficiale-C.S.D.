@@ -4,9 +4,11 @@ exports.ticketCategories = exports.isTicketGuild = void 0;
 exports.getTicketConfig = getTicketConfig;
 exports.saveTicketConfig = saveTicketConfig;
 exports.reserveTicketNumber = reserveTicketNumber;
+exports.releaseTicketNumber = releaseTicketNumber;
 exports.createTicketRecord = createTicketRecord;
 exports.getTicket = getTicket;
 exports.closeTicketRecord = closeTicketRecord;
+exports.deleteTicketRecord = deleteTicketRecord;
 exports.listOpenTickets = listOpenTickets;
 exports.ticketPanelComponents = ticketPanelComponents;
 exports.ticketWelcomeComponents = ticketWelcomeComponents;
@@ -77,6 +79,11 @@ async function reserveTicketNumber(guildId) {
         });
     });
 }
+async function releaseTicketNumber(guildId, reservedNumber) {
+    await run(`UPDATE ticket_configs
+     SET next_number = next_number - 1
+     WHERE guild_id = ? AND next_number = ?`, [guildId, reservedNumber + 1]);
+}
 async function createTicketRecord(channelId, guildId, openerId, category, reservedNumber) {
     const ticketNumber = reservedNumber ?? await reserveTicketNumber(guildId);
     const createdAt = new Date().toISOString();
@@ -101,6 +108,9 @@ async function getTicket(channelId) {
 }
 function closeTicketRecord(channelId) {
     return run('UPDATE tickets SET status = \'closed\' WHERE channel_id = ?', [channelId]);
+}
+function deleteTicketRecord(channelId) {
+    return run('DELETE FROM tickets WHERE channel_id = ?', [channelId]);
 }
 async function listOpenTickets(guildId) {
     const rows = await all('SELECT * FROM tickets WHERE guild_id = ? AND status = \'open\'', [guildId]);
@@ -152,6 +162,38 @@ async function applyClaim(channel, ticket, config, member) {
     });
     if (!claimed)
         return false;
+    const overwriteIds = [config.staffRoleId, ticket.openerId, member.id];
+    const previousOverwrites = new Map();
+    for (const id of overwriteIds) {
+        const overwrite = channel.permissionOverwrites.cache.get(id);
+        previousOverwrites.set(id, overwrite ? {
+            allow: overwrite.allow.toArray(),
+            deny: overwrite.deny.toArray(),
+        } : null);
+    }
+    const restoreOverwrites = async () => {
+        const previousValue = (previous, permission) => {
+            if (previous.allow.includes(permission))
+                return true;
+            if (previous.deny.includes(permission))
+                return false;
+            return null;
+        };
+        for (const id of overwriteIds) {
+            const previous = previousOverwrites.get(id);
+            if (!previous) {
+                await channel.permissionOverwrites.delete(id);
+            }
+            else {
+                await channel.permissionOverwrites.edit(id, {
+                    ViewChannel: previousValue(previous, 'ViewChannel'),
+                    SendMessages: previousValue(previous, 'SendMessages'),
+                    AttachFiles: previousValue(previous, 'AttachFiles'),
+                    ReadMessageHistory: previousValue(previous, 'ReadMessageHistory'),
+                });
+            }
+        }
+    };
     try {
         await channel.permissionOverwrites.edit(config.staffRoleId, { ViewChannel: false, SendMessages: false, AttachFiles: false, ReadMessageHistory: false });
         await channel.permissionOverwrites.edit(ticket.openerId, { ViewChannel: true, SendMessages: true, AttachFiles: true, ReadMessageHistory: true });
@@ -159,6 +201,12 @@ async function applyClaim(channel, ticket, config, member) {
         return true;
     }
     catch (error) {
+        try {
+            await restoreOverwrites();
+        }
+        catch (restoreError) {
+            console.error('Impossibile ripristinare completamente i permessi del ticket:', restoreError);
+        }
         await run("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND claimed_by = ?", [ticket.channelId, member.id]);
         throw error;
     }

@@ -4,6 +4,7 @@ exports.data = void 0;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
 const restrictionManager_1 = require("../utils/restrictionManager");
+const userNotification_1 = require("../utils/userNotification");
 exports.data = new discord_js_1.SlashCommandBuilder()
     .setName('restrizione')
     .setDescription('Impedisce a un utente di entrare nei server affiliati.')
@@ -133,6 +134,12 @@ async function execute(interaction) {
     };
     try {
         (0, restrictionManager_1.setRestriction)(restriction);
+        await (0, userNotification_1.sendUserNotification)(user, new discord_js_1.EmbedBuilder()
+            .setColor(0xED4245)
+            .setTitle('🚫 Restrizione applicata')
+            .setDescription('È stata applicata una restrizione al tuo account.')
+            .addFields({ name: 'Motivo', value: motivo }, { name: 'Durata', value: durata, inline: true }, { name: 'Operatore', value: interaction.user.tag, inline: true })
+            .setTimestamp());
     }
     catch (error) {
         console.error('[RESTRICTION] Impossibile salvare la restrizione:', error);

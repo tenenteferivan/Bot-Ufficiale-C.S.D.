@@ -32,16 +32,36 @@ function loadStaff() {
     }
     const raw = fs_1.default.readFileSync(FILE_PATH, 'utf8').trim();
     if (!raw) {
-        return {
+        const emptyData = {
             operatori: [],
             dirigenza: [],
         };
+        saveStaff(emptyData);
+        return emptyData;
     }
-    return JSON.parse(raw);
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    }
+    catch (error) {
+        console.error('[STAFF] JSON corrotto in staff.json:', error);
+        throw new Error('Il file staff.json contiene JSON non valido.');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+        !('operatori' in parsed) || !('dirigenza' in parsed) ||
+        !Array.isArray(parsed.operatori) || !Array.isArray(parsed.dirigenza) ||
+        !parsed.operatori.every((id) => typeof id === 'string') ||
+        !parsed.dirigenza.every((id) => typeof id === 'string')) {
+        console.error('[STAFF] Struttura non valida in staff.json.');
+        throw new Error('La struttura di staff.json non è valida.');
+    }
+    return { operatori: [...parsed.operatori], dirigenza: [...parsed.dirigenza] };
 }
 function saveStaff(data) {
     ensureDataDirectory();
-    fs_1.default.writeFileSync(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    const temporaryPath = `${FILE_PATH}.tmp`;
+    fs_1.default.writeFileSync(temporaryPath, JSON.stringify(data, null, 2), 'utf8');
+    fs_1.default.renameSync(temporaryPath, FILE_PATH);
 }
 function isOperatore(userId) {
     const data = loadStaff();

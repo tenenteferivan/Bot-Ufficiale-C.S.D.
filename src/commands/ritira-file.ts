@@ -33,16 +33,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     await decryptFileStream(fileName, tempFile);
-    await interaction.user.send({
+    await interaction.editReply({
       content: `📦 File richiesto dall'archivio: **${fileName}**`,
       files: [new AttachmentBuilder(tempFile, { name: fileName })],
     });
     await notifyArchiveOwner(interaction.client, 'Download', interaction.user.id, true, `File: ${fileName}`);
-    await interaction.editReply('✅ Il file è stato inviato tramite DM.');
   } catch (error: any) {
     const detail = error?.code === 'ENOENT'
       ? 'File non trovato.'
-      : 'Invio DM fallito oppure file non decifrabile.';
+      : 'File non decifrabile o non disponibile.';
     await notifyArchiveOwner(interaction.client, 'Download', interaction.user.id, false, detail);
     await interaction.editReply(`❌ ${detail}`);
   } finally {

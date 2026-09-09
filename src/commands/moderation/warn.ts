@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { requireGuildPermission } from '../../utils/permissions';
+import { sendModNotification } from '../../utils/modLogger';
 
 export const data = new SlashCommandBuilder()
   .setName('warn')
@@ -12,4 +13,5 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   if (!await requireGuildPermission(interaction, PermissionFlagsBits.ModerateMembers)) return;
   const targetUser = interaction.options.getUser('utente', true);
   await interaction.reply({ content: `Avvertimento inviato a ${targetUser}.`, ephemeral: true });
+  await sendModNotification(interaction);
 }

@@ -7,6 +7,7 @@ exports.data = void 0;
 exports.initializeGlobalBanExpirationSystem = initializeGlobalBanExpirationSystem;
 exports.execute = execute;
 const discord_js_1 = require("discord.js");
+const userNotification_1 = require("../utils/userNotification");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const DATA_DIR = path_1.default.join(process.cwd(), 'data');
@@ -39,10 +40,11 @@ function loadGlobalBanServers() {
         !Array.isArray(data.guildIds)) {
         throw new Error('Formato di global-ban-servers.json non valido.');
     }
-    const guildIds = data.guildIds.filter((guildId) => typeof guildId === 'string' &&
-        /^\d{17,20}$/.test(guildId));
+    if (!data.guildIds.every((guildId) => typeof guildId === 'string' && /^\d{17,20}$/.test(guildId))) {
+        throw new Error('global-ban-servers.json contiene ID guild non validi.');
+    }
     return {
-        guildIds,
+        guildIds: [...data.guildIds],
     };
 }
 /*
@@ -59,17 +61,22 @@ function loadGlobalBans() {
     }
     try {
         const content = fs_1.default.readFileSync(GLOBAL_BANS_FILE, 'utf8');
+        if (!content.trim()) {
+            const emptyData = { bans: [] };
+            saveGlobalBans(emptyData);
+            return emptyData;
+        }
         const data = JSON.parse(content);
         if (!data ||
             !Array.isArray(data.bans)) {
             throw new Error('Formato di global-bans.json non valido.');
         }
-        const bans = data.bans.filter((ban) => {
+        const bans = data.bans.map((ban) => {
             if (!ban || typeof ban !== 'object') {
-                return false;
+                throw new Error('Un record di ban globale non è valido.');
             }
             const record = ban;
-            return (typeof record.userId === 'string' &&
+            if (!(typeof record.userId === 'string' &&
                 /^\d{17,20}$/.test(record.userId) &&
                 typeof record.userTag === 'string' &&
                 typeof record.motivo === 'string' &&
@@ -79,7 +86,10 @@ function loadGlobalBans() {
                 typeof record.operatorTag === 'string' &&
                 typeof record.createdAt === 'number' &&
                 Number.isFinite(record.createdAt) &&
-                typeof record.notified === 'boolean');
+                typeof record.notified === 'boolean')) {
+                throw new Error('Un record di ban globale non è valido.');
+            }
+            return record;
         });
         return {
             bans,
@@ -233,7 +243,7 @@ async function notifyGlobalBanExpiration(client, ban) {
                 `📅 **Scaduto:** ${expirationDate}`,
                 `👮 **Operatore:** ${ban.operatorTag}`,
                 '',
-                '⚠️ **È necessario procedere con l\'unban dell\'utente nei server interessati.**',
+                '✅ **Il ban è stato rimosso automaticamente dai server interessati.**',
             ].join('\n'),
             allowedMentions: {
                 parse: ['everyone'],
@@ -244,6 +254,27 @@ async function notifyGlobalBanExpiration(client, ban) {
     catch (error) {
         console.error(`[BAN GLOBALE] Impossibile inviare la notifica di scadenza per ${ban.userId}:`, error);
         throw error;
+    }
+}
+async function removeExpiredGlobalBan(client, ban) {
+    const configuredGuildId = process.env.GUILD_ID?.trim();
+    const { guildIds } = loadGlobalBanServers();
+    for (const guildId of guildIds) {
+        if (guildId === configuredGuildId)
+            continue;
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild)
+            throw new Error(`Il bot non è presente nella guild ${guildId}.`);
+        try {
+            await guild.bans.fetch(ban.userId);
+        }
+        catch (error) {
+            if (error?.code === 10026)
+                continue;
+            throw error;
+        }
+        await guild.bans.remove(ban.userId, `[BAN GLOBALE] Scadenza automatica | Motivo originale: ${ban.motivo}`);
+        console.log(`[BAN GLOBALE] Unban automatico eseguito nella guild ${guildId} per ${ban.userId}.`);
     }
 }
 /*
@@ -276,6 +307,7 @@ async function handleGlobalBanExpiration(client, userId) {
         return;
     }
     try {
+        await removeExpiredGlobalBan(client, ban);
         await notifyGlobalBanExpiration(client, ban);
         /*
          * Segniamo la notifica come eseguita.
@@ -313,7 +345,7 @@ function scheduleGlobalBanExpiration(client, ban) {
     /*
      * Node.js ha un limite massimo per setTimeout.
      */
-    const MAX_TIMEOUT = 2_147_483_647;
+    const MAX_TIMEOUT = 60 * 60 * 1000;
     /*
      * Se il ban è già scaduto,
      * il timer viene impostato a 0.
@@ -660,6 +692,12 @@ async function execute(interaction) {
      * ha ricevuto effettivamente il ban.
      */
     if (riusciti > 0) {
+        await (0, userNotification_1.sendUserNotification)(user, new discord_js_1.EmbedBuilder()
+            .setColor(0x992D22)
+            .setTitle('🔨 Ban globale applicato')
+            .setDescription('È stato applicato un ban globale al tuo account.')
+            .addFields({ name: 'Motivo', value: motivo }, { name: 'Durata', value: durata, inline: true }, { name: 'Operatore', value: interaction.user.tag, inline: true })
+            .setTimestamp());
         try {
             const data = loadGlobalBans();
             /*

@@ -10,6 +10,7 @@ import {
   parsePointAmount,
   removePoints,
 } from '../utils/userRecord';
+import { sendUserNotification } from '../utils/userNotification';
 
 export const data = new SlashCommandBuilder()
   .setName('rimuovi-punti')
@@ -147,6 +148,8 @@ export async function execute(
         text: 'Registro Sanzioni C.S.D.',
       })
       .setTimestamp();
+
+    await sendUserNotification(targetUser, embed);
 
     await interaction.reply({
       embeds: [embed],

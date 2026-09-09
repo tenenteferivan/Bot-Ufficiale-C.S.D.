@@ -55,7 +55,11 @@ function loadGlobalBanServers(): GlobalBanServers {
       );
     }
 
-    return data;
+    if (!data.guildIds.every((guildId: unknown) => typeof guildId === 'string' && /^\d{17,20}$/.test(guildId))) {
+      throw new Error('global-ban-servers.json contiene ID guild non validi.');
+    }
+
+    return { guildIds: [...data.guildIds] };
   } catch (error) {
     console.error(
       '[BAN GLOBALE] Errore durante la lettura del file:',
