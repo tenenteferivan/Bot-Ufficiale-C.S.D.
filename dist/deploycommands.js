@@ -178,7 +178,9 @@ async function deployCommands() {
                 loadFailed = true;
                 const fileName = path.basename(filePath);
                 const nameFormatted = `/${fileName}`.padEnd(23, ' ');
-                console.log(`${style.cyan}│${style.reset}  ${style.red}✗ Slash${style.reset}  ┆ ${nameFormatted} ${style.red}[Errore]${style.reset}     ${style.cyan}│${style.reset}`);
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                console.log(`${style.cyan}│${style.reset}  ${style.red}✗ Slash${style.reset}  ┆ ${nameFormatted} ${style.red}[Errore: ${errorMessage}]${style.reset} ${style.cyan}│${style.reset}`);
+                console.error(`Errore caricando ${filePath}:`, err);
             }
         }
         if (loadFailed) {
