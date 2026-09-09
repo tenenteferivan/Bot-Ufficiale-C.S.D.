@@ -23,6 +23,7 @@ export const ticketCategories = {
   partnership: { label: 'Partnership / Collaborazione', emoji: '🤝', description: 'Proposte commerciali, affiliati o collaborazioni.' },
   segnalazione: { label: 'Segnalazione', emoji: '🚨', description: 'Violazioni del regolamento o utenti problematici.' },
   richiesta_entrata: { label: 'Richiesta Entrata', emoji: '📝', description: 'Richiesta entrata Nella Confederazione.' },
+  mediazione_conflitto: { label: 'Mediazione Conflitto', emoji: '⚖️', description: 'Mediazione e risoluzione di conflitti tra utenti o server.' },
 } as const;
 
 export type TicketCategory = keyof typeof ticketCategories;

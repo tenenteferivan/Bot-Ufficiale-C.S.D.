@@ -35,7 +35,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const panel = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle('🎫 Supporto C.S.D.')
-    .setDescription('Hai bisogno di aiuto? Seleziona dal menu la categoria più adatta alla tua richiesta.\n\n🛡️ **Amministrazione**\nQuestioni burocratiche, gestionali o riservate.\n\n💬 **Assistenza Generale**\nDubbi, informazioni e supporto sul server.\n\n🤝 **Partnership / Collaborazione**\nProposte commerciali, affiliati o collaborazioni.\n\n🚨 **Segnalazione**\nViolazioni del regolamento o utenti problematici.\n\n📝 **Richiesta Entrata**\nRichiesta entrata Nella Confederazione.')
+    .setDescription('Hai bisogno di aiuto? Seleziona dal menu la categoria più adatta alla tua richiesta.\n\n🛡️ **Amministrazione**\nQuestioni burocratiche, gestionali o riservate.\n\n💬 **Assistenza Generale**\nDubbi, informazioni e supporto sul server.\n\n🤝 **Partnership / Collaborazione**\nProposte commerciali, affiliati o collaborazioni.\n\n🚨 **Segnalazione**\nViolazioni del regolamento o utenti problematici.\n\n📝 **Richiesta Entrata**\nRichiesta entrata Nella Confederazione.\n\n⚖️ **Mediazione Conflitto**\nMediazione e risoluzione di conflitti tra utenti o server.')
     .setFooter({ text: 'C.S.D. Supporto | Seleziona una categoria per aprire un ticket' })
     .setTimestamp();
 
